@@ -1,5 +1,11 @@
 import os
 import inspect
+
+current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+main_dir = current_dir + '/../../'
+os.sys.path.insert(0, '../' + current_dir)
+os.sys.path.insert(0, main_dir)
+
 import sys
 from optparse import OptionParser
 from torch.utils.data import DataLoader
@@ -13,9 +19,6 @@ from SkillsSequencing.qpnet.spec_datasets import SkillDataset
 from SkillsSequencing.robots.gripper.gripper2d import Gripper2D
 
 device = prepare_torch()
-current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-main_dir = current_dir + '/../../'
-os.sys.path.insert(0, '../' + current_dir)
 
 
 def gripper_experiment(options):
@@ -82,8 +85,8 @@ def gripper_experiment(options):
                                                  state_idx=[4, 5, 6, 7, 8, 9])
 
     skill_list = [pick_pos_skill, place_pos_skill, close_gripper_skill, open_gripper_skill]
-    skill_fcns = [create_ds_skill('../../' + pick_clf, '../../' + pick_ds, pick_ori, pick_goal, speed=0.15),
-                  create_ds_skill('../../' + place_clf, '../../' + place_ds, place_ori, place_goal, speed=0.3),
+    skill_fcns = [create_ds_skill(pick_clf, pick_ds, pick_ori, pick_goal, speed=0.15),
+                  create_ds_skill(place_clf, place_ds, place_ori, place_goal, speed=0.3),
                   robot.close_skill, robot.open_skill]
 
     # Define skills clusters
