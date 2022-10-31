@@ -15,6 +15,7 @@ To install the library, clone the repository and install the related packages wi
 ```
 pip install -r requirements.txt
 ```
+However, install pytorch from their [official website](https://pytorch.org/). 
 
 ## Examples
 ### Pick-and-place example with a 4-DoFs 2D gripper, with a single demonstration

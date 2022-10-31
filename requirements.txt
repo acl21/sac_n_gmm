@@ -1,10 +1,13 @@
 numpy
 scipy
 matplotlib
-torch
 cvxpy
 qpth
 roboticstoolbox-python
+hydra-core
+hydra-colorlog
+torchvision
+pytorch-lightning
 
 -e .
 

@@ -1,0 +1,4 @@
+_target_: datasets.calvin_dataset.CalvinDataset
+_recursive_: false
+
+data_dir: /work/dlclarge1/lagandua-refine-skills/calvin/dataset/calvin_debug_dataset/

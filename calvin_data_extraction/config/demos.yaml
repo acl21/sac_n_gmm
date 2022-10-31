@@ -1,0 +1,28 @@
+defaults:
+  - datamodule: default
+  - _self_
+
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+seed: 42
+log_dir: ${root}/logs
+slurm: false
+demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
+skill: 'turn_off_led'
+
+root: /home/lagandua/projects/refining-skill-sequences/calvin_data_extraction/
+
+hydra:
+  run:
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.override_dirname}
+  job:
+    config:
+      override_dirname:
+        exclude_keys:
+          - log_dir
+          - datamodule.dataset.data_dir
+          - datamodule.dataset.num_workers

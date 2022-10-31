@@ -3,3 +3,6 @@ dist
 *.egg-info
 .idea
 *__pycache__
+jupyter_logs/
+**/logs
+**.ipynb_checkpoints/

@@ -1,0 +1,2 @@
+robot_obs:
+  - _target_: datasets.utils.transforms.ArrayToTensor
