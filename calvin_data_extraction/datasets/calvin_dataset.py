@@ -84,7 +84,7 @@ class CalvinDataset(BaseDataset):
         end_file_indx = info_indx[1]
 
         episode = self.zip_sequence(start_file_indx, end_file_indx)
-        robot_obs = [self.transform_robot_obs(obs) for obs in episode["robot_obs"][:, :7]]
+        robot_obs = [self.transform_robot_obs(obs) for obs in episode["robot_obs"]]
 
         robot_obs = torch.stack(robot_obs)
 

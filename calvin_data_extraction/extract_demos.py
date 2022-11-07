@@ -4,6 +4,7 @@ import sys
 from typing import List, Union
 import os
 import numpy as np
+from numpy import loadtxt
 
 cwd_path = Path(__file__).absolute().parents[0]
 parent_path = cwd_path.parents[0]
@@ -19,9 +20,9 @@ logger = logging.getLogger(__name__)
 os.chdir(cwd_path)
 
 
-def save_demonstrations(datamodule, save_dir):
+def save_demonstrations(datamodule, save_dir, skill):
     mode = ["training", "validation"]
-    p = Path(Path(save_dir).expanduser() / datamodule.skill)
+    p = Path(Path(save_dir).expanduser() / skill)
     p.mkdir(parents=True, exist_ok=True)
 
     for m in mode:
@@ -55,9 +56,14 @@ def extract_demos(cfg: DictConfig) -> None:
         cfg: hydra config
     """
     seed_everything(cfg.seed, workers=True)
-    datamodule = hydra.utils.instantiate(cfg.datamodule)
-    datamodule.setup(stage="fit")
-    save_demonstrations(datamodule, cfg.demos_dir)
+    f = open(cfg.skillnames_file, "r")
+    skill_set = f.read()
+    skill_set = skill_set.split("\n")
+    for skill in skill_set:
+        cfg.skill = skill
+        datamodule = hydra.utils.instantiate(cfg.datamodule)
+        datamodule.setup(stage="fit")
+        save_demonstrations(datamodule, cfg.demos_dir, skill)
 
 
 if __name__ == "__main__":

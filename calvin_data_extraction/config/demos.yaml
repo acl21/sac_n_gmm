@@ -9,7 +9,8 @@ seed: 42
 log_dir: ${root}/logs
 slurm: false
 demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
-skill: 'turn_off_led'
+skill: 'none'
+skillnames_file: /work/dlclarge1/lagandua-refine-skills/calvin_demos/skillnames.txt
 
 root: /home/lagandua/projects/refining-skill-sequences/calvin_data_extraction/
 
