@@ -21,8 +21,8 @@ class CLFDS(nn.Module):
 
     def clf_cost(self, xi, d_xi):
         _, dV = self.clf_model.forward_with_grad(xi, create_graph=True)
-        dim = dV.shape[-1]
-        psi = torch.matmul(dV.view(-1, 1, dim), d_xi.view(-1, dim, 1))
+        B, C, dim = dV.shape
+        psi = torch.matmul(dV.view(B, C, 1, dim), d_xi.view(B, C, dim, 1))
         psi = torch.squeeze(psi) / (torch.norm(dV, dim=-1) * torch.norm(d_xi, dim=-1) + 1e-5)
         l_all = (1 + self.w_clf) * torch.sign(psi) * (psi ** 2) / 2 + (1 - self.w_clf) * (psi ** 2) / 2
         cost = torch.sum(l_all)
@@ -47,7 +47,7 @@ class CLFDS(nn.Module):
                     epoch_cost += cost
                     count += 1
 
-                if epoch % 100 == 0:
+                if (epoch + 1) % 100 == 0:
                     torch.save(self.clf_model, fname)
 
 
@@ -90,9 +90,8 @@ class CLFDS(nn.Module):
         xi = dataset.X
         d_xi = dataset.dX
         _, dV = self.clf_model.forward_with_grad(xi)
-        dim = dV.shape[-1]
-
-        psi = torch.matmul(dV.view(-1, 1, dim), d_xi.view(-1, dim, 1))
+        B, C, dim = dV.shape
+        psi = torch.matmul(dV.view(B, C, 1, dim), d_xi.view(B, C, dim, 1))
         psi = torch.squeeze(psi) + self.rho(xi)
         psi = psi / (torch.norm(dV, dim=-1) * torch.norm(dV, dim=-1) + 1e-5)
         psi = torch.unsqueeze(psi, dim=-1)
@@ -102,7 +101,7 @@ class CLFDS(nn.Module):
         dataset.dX = dX.detach()
         return dataset
 
-    def train_ds(self, dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname='ds_model', load_if_possible=True):
+    def train_ds(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname='ds_model', load_if_possible=True):
         if isinstance(self.reg_model, nn.Module):
             if os.path.exists(fname) and load_if_possible:
                 self.reg_model = torch.load(fname)
@@ -110,9 +109,13 @@ class CLFDS(nn.Module):
                 ds_dataset = self.collect_ds_data(dataset)
                 opt = optim.Adam(self.reg_model.parameters(), lr=lr)
                 dataloader = DataLoader(ds_dataset, batch_size=batch_size, shuffle=True)
+                val_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=True)
                 for epoch in range(max_epochs):
                     epoch_cost = 0
                     count = 0
+                    val_cost = 0
+                    epoch_val_cost = 0
+                    self.reg_model.train()
                     for _, (xi, d_xi) in enumerate(dataloader):
                         opt.zero_grad(set_to_none=True)
                         d_xi_ = self.reg_model.forward(xi)
@@ -123,13 +126,20 @@ class CLFDS(nn.Module):
                         epoch_cost += cost
                         count += 1
 
-                    if epoch % 100 == 0:
+                    with torch.no_grad():
+                        self.reg_model.eval()
+                        for _, (xi, d_xi) in enumerate(val_dataloader):
+                            d_xi_ = self.reg_model.forward(xi)
+                            val_cost = nn.MSELoss()(d_xi_, d_xi)
+                            epoch_val_cost += val_cost 
+
+                    if (epoch + 1) % 100 == 0:
                         torch.save(self.reg_model, fname)
 
                     epoch_cost /= count
-                    print('epoch: %1d / %1d, cost: %.8f' % (epoch, max_epochs, epoch_cost), end='\r')
+                    print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost), end='\r')
 
-                print('epoch: %1d / %1d, cost: %.8f' % (epoch, max_epochs, epoch_cost))
+                print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost))
 
     def forward(self, x):
         return self.reg_model.forward(x)
