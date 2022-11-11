@@ -1,0 +1,3 @@
+[submodule "examples/CALVINExperiment/calvin_env"]
+	path = examples/CALVINExperiment/calvin_env
+	url = https://github.com/mees/calvin_env
