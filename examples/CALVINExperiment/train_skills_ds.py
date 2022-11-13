@@ -28,14 +28,14 @@ def train_skills_ds(options):
     skill_set = skill_set.split("\n")
     logger.info(f'Found {len(skill_set)} skills in the list')
     logger.info(f'Training DS with {options.state_type} as the input')
-    for skill in skill_set:
+    for idx, skill in enumerate(skill_set):
         # Create skill specific output directory
         skill_output_dir = os.path.join(options.ds_output_dir, options.state_type, skill)
         os.makedirs(skill_output_dir, exist_ok=True)
         # Get train and validation datasets
-        train_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type)
-        val_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, train=False)
-        logger.info(f'Skill: {skill}, Train Data: {train_dataset.X.size()}, Val. Data: {val_dataset.X.size()}')
+        train_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, demos_dir=options.demos_dir)
+        val_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, train=False, demos_dir=options.demos_dir)
+        logger.info(f'Skill {idx}: {skill}, Train Data: {train_dataset.X.size()}, Val. Data: {val_dataset.X.size()}')
         # Create models to train
         dim = train_dataset.X.shape[-1]
         clf_model = WSAQF(dim=dim, n_qfcn=1)
