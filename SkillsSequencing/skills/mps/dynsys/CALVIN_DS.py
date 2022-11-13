@@ -20,10 +20,11 @@ class CALVINDynSysDataset(Dataset):
         dt = 2 / 30
         start_idx, end_idx = self.get_valid_columns()
         self.X = np.load(data_file)[:,:,start_idx:end_idx]
-        # ipdb.set_trace()
+        # Make X goal centered i.e., subtract each trajectory with its goal
+        self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
         self.dX = (self.X[:, 2:, :] - self.X[:, :-2, :]) / dt
         self.X = self.X[:, 1:-1, :]
-        
+
         self.X = torch.from_numpy(self.X).type(torch.FloatTensor)
         self.dX = torch.from_numpy(self.dX).type(torch.FloatTensor)
 
