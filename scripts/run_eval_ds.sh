@@ -31,6 +31,7 @@ conda activate refine
 start=`date +%s`
 
 python examples/CALVINExperiment/evaluate_skills_ds.py --state-type pos
+python examples/CALVINExperiment/evaluate_skills_ds.py --state-type joint
 
 end=`date +%s`
 runtime=$((end-start))

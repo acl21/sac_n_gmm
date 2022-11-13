@@ -50,13 +50,12 @@ def evaluate_skills_ds(options):
         skill_accs[skill] = str(acc)
 
     # Write accuracies to a file
-    with open(os.path.join('./examples/CALVINExperiment/logs/', f'skill_ds_acc_er{options.error_margin}_sp{options.speed}.txt'), 'w') as f:
+    with open(os.path.join('./examples/CALVINExperiment/logs/', f'skill_ds_acc_{options.state_type}_er{options.error_margin}_sp{options.speed}.txt'), 'w') as f:
         writer = csv.writer(f)
         for row in skill_accs.items():
             print(row)
             writer.writerow(row)
-    logger.info(f'Evaluation complete. DS model accuracies are saved at \
-        {os.path.join("./examples/CALVINExperiment/logs/", f"skill_ds_acc_er{options.error_margin}_sp{options.speed}.txt")} directory')
+    logger.info(f'Evaluation complete. DS model accuracies are saved at {os.path.join("./examples/CALVINExperiment/logs/", f"skill_ds_acc_{options.state_type}_er{options.error_margin}_sp{options.speed}.txt")} directory')
 
 if __name__ == "__main__":
     parser = OptionParser()
