@@ -1,6 +1,8 @@
 from gym import spaces
 from calvin_env.envs.play_table_env import PlayTableSimEnv
 import hydra
+import imageio
+import os
 
 
 class SkillSpecificEnv(PlayTableSimEnv):
@@ -16,11 +18,17 @@ class SkillSpecificEnv(PlayTableSimEnv):
         self.state_type = None
         self.max_episode_steps = 1000
 
+        self.frames = []
+        self.outdir = None
+        self.count = 1
+
 
     def set_skill(self, skill):
+        """Set skill name"""
         self.skill_name = skill
 
     def set_state_type(self, type):
+        """Set env input type - joint, pos, pos_ori"""
         self.state_type = type
         self.obs_idx = self.get_valid_columns()
 
@@ -45,6 +53,28 @@ class SkillSpecificEnv(PlayTableSimEnv):
             depth_obs[f"depth_{cam.name}"] = depth
         obs = {"rgb_obs": rgb_obs, "depth_obs": depth_obs}
         return obs
+
+    def set_outdir(self, outdir):
+        """Set output directory where recordings can/will be saved"""
+        self.outdir = outdir
+
+    def record(self, obs_type='rgb', cam_type='static'):
+        """Record RGB obsservation"""
+        frame = self.get_camera_obs()[f'{obs_type}_obs'][f'{obs_type}_{cam_type}']
+        self.frames.append(frame)
+
+    def reset_record(self):
+        """Reset recorded frames"""
+        self.frames = []
+
+    def save_and_reset_recording(self, path=None):
+        """Save recorded frames as a video"""
+        if path is None:
+            imageio.mimsave(os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.count}.mp4'), self.frames, fps=30)
+            self.count += 1
+        else:
+            imageio.mimsave(path, self.frames, fps=30)
+        self.reset_record()
 
     def _success(self):
         """Returns a boolean indicating if the task was performed correctly"""

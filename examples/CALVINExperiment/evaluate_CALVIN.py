@@ -43,36 +43,45 @@ class SkillEvaluator(object):
         self.skill_set = skill_set.split("\n")
         self.logger = logging.getLogger('SkillEvaluator')
 
-    def evaluate(self, ds, dataset, max_steps=500, sampling_dt=1/30, render=False):
+    def evaluate(self, ds, dataset, max_steps=500, sampling_dt=1/30, render=False, record=False):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
-        # start_idx, end_idx = self.env.get_valid_columns()
-        for _, (xi, d_xi) in enumerate(dataloader):
-            self.logger.info(f'Test Trajectory {_+1}')
+        start_idx, end_idx = self.env.get_valid_columns()
+        for idx, (xi, d_xi) in enumerate(dataloader):
+            if (idx % 5 == 0) or (idx == len(dataset)):
+                self.logger.info(f'Test Trajectory {idx+1}/{len(dataset)}')
             x0 = xi.squeeze()[0, :].numpy()
             goal = xi.squeeze()[-1, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
-            current_state = observation[:3]
-            action = np.array([x0[:3], observation[3:6], -1], dtype=object)
+            current_state = observation[start_idx:end_idx]
+            action = np.array([x0[:3], x0[3:6], -1], dtype=object)
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
-                current_state = observation[:3]
-            x = current_state[:3]
+                current_state = observation[start_idx:end_idx]
+            x = current_state[start_idx:end_idx]
             # self.logger.info(f'Simulating with DS')
+            if record:
+                self.logger.info(f'Recording Robot Camera Obs')
+                self.env.record()
             for step in range(max_steps):
-                d_x = ds.reg_model.forward(torch.from_numpy(x-goal[:3]).float().unsqueeze(dim=0).unsqueeze(dim=0))
+                d_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
                 d_x = d_x.detach().cpu().numpy().squeeze()
                 d_x = sampling_dt * d_x
-                action = np.append(d_x, np.append(np.zeros(3), -1))
+                action = np.append(d_x, -1)
                 observation, reward, done, info = self.env.step(action)
-                x = observation[:3]
+                x = observation[start_idx:end_idx]
                 rollout_return += reward
+                if record:
+                    self.env.record()
                 if render:
                     self.env.render()
                 if done:
                     break
+            if record:
+                self.logger.info(f'Saving Robot Camera Obs')
+                self.env.save_and_reset_recording()
             if info["success"]:
                 succesful_rollouts += 1
                 self.logger.info('Success!')
@@ -84,6 +93,7 @@ class SkillEvaluator(object):
     def run(self):
         skill_accs = {}
         for skill in self.skill_set:
+            self.env.set_skill(skill)
             skill_model_dir = os.path.join(self.cfg.skills_dir, self.cfg.state_type, skill)
             clf_file = os.path.join(skill_model_dir, 'clf')
             reg_file = os.path.join(skill_model_dir, 'ds')
@@ -102,7 +112,8 @@ class SkillEvaluator(object):
             logger.info(f'Evaluating {skill} skill on CALVIN environment')
             logger.info(f'Test/Val Data: {val_dataset.X.size()}')
             # Evaluate by simulating in the CALVIN environment
-            acc, avg_return, avg_len = self.evaluate(clfds, val_dataset, max_steps=self.cfg.max_steps)
+            acc, avg_return, avg_len = self.evaluate(clfds, val_dataset, max_steps=self.cfg.max_steps, \
+                                                     render=self.cfg.render, record=self.cfg.record)
             skill_accs[skill] = [str(acc), str(avg_return), str(avg_len)]
 
         # Write accuracies to a file
@@ -118,8 +129,10 @@ def main(cfg: DictConfig) -> None:
     new_env_cfg["tasks"] = cfg.calvin_env.tasks
     new_env_cfg.pop("_target_", None)
     new_env_cfg.pop("_recursive_", None)
+
     env = SkillSpecificEnv(**new_env_cfg)
     env.set_state_type(cfg.state_type)
+    env.set_outdir(hydra.core.hydra_config.HydraConfig.get()['runtime']['output_dir'])
 
     eval = SkillEvaluator(cfg, env)
     eval.run()
