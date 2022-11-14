@@ -7,9 +7,12 @@ import torch
 from utils import plot_3d_trajectories
 
 class CALVINDynSysDataset(Dataset):
-    def __init__(self, skill, train=True, state_type='joint', demos_dir='/work/dlclarge1/lagandua-refine-skills/calvin_demos/'):
+    def __init__(self, skill, train=True, state_type='joint', 
+                 demos_dir='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',
+                 goal_centered=False):
         self.skill = skill
         self.demos_dir = demos_dir
+        self.goal_centered = goal_centered
         if train:
             fname = 'training'
         else:
@@ -20,8 +23,9 @@ class CALVINDynSysDataset(Dataset):
         dt = 2 / 30
         start_idx, end_idx = self.get_valid_columns()
         self.X = np.load(data_file)[:,:,start_idx:end_idx]
-        # Make X goal centered i.e., subtract each trajectory with its goal
-        self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
+        if self.goal_centered:
+            # Make X goal centered i.e., subtract each trajectory with its goal
+            self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
         self.dX = (self.X[:, 2:, :] - self.X[:, :-2, :]) / dt
         self.X = self.X[:, 1:-1, :]
 

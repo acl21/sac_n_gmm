@@ -33,8 +33,8 @@ def train_skills_ds(options):
         skill_output_dir = os.path.join(options.ds_output_dir, options.state_type, skill)
         os.makedirs(skill_output_dir, exist_ok=True)
         # Get train and validation datasets
-        train_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, demos_dir=options.demos_dir)
-        val_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, train=False, demos_dir=options.demos_dir)
+        train_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, demos_dir=options.demos_dir, goal_centered=True)
+        val_dataset = CALVINDynSysDataset(skill=skill, state_type=options.state_type, train=False, demos_dir=options.demos_dir, goal_centered=True)
         logger.info(f'Skill {idx}: {skill}, Train Data: {train_dataset.X.size()}, Val. Data: {val_dataset.X.size()}')
         # Create models to train
         dim = train_dataset.X.shape[-1]
