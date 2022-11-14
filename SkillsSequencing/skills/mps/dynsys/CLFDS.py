@@ -51,7 +51,6 @@ class CLFDS(nn.Module):
                 if (epoch + 1) % 100 == 0:
                     torch.save(self.clf_model, fname)
 
-
                 epoch_cost /= count
                 print('epoch: %1d / %1d, cost: %.8f' % (epoch, max_epochs, epoch_cost), end='\r')
 
@@ -173,23 +172,6 @@ class CLFDS(nn.Module):
                 plt.legend()
                 plt.savefig(f'{fname}.png', dpi=300)
                 plt.close('all')
-
-    def evaluate_ds(self, dataset, error_margin=0.01, T=1000, speed=0.01):
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
-        count = 0
-        for _, (xi, d_xi) in enumerate(dataloader):
-            x0 = xi.squeeze()[0, :].numpy()
-            goal = xi.squeeze()[-1, :].numpy()
-            x = x0
-            for _ in range(T):
-                x = x
-                d_x = self.reg_model.forward(torch.from_numpy(x).float().unsqueeze(dim=0).unsqueeze(dim=0))
-                d_x = d_x.detach().cpu().numpy().squeeze()
-                x = x + speed * d_x
-                if np.linalg.norm(x-goal) <= error_margin:
-                    count += 1
-                    break
-        return count*100/(len(dataset))
 
     def forward(self, x):
         return self.reg_model.forward(x)

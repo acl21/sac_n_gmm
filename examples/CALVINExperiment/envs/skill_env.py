@@ -1,0 +1,106 @@
+from gym import spaces
+from calvin_env.envs.play_table_env import PlayTableSimEnv
+import hydra
+
+
+class SkillSpecificEnv(PlayTableSimEnv):
+    def __init__(self, tasks: dict = {}, **kwargs):
+        super(SkillSpecificEnv, self).__init__(**kwargs)
+        # For this example we will modify the observation to
+        # only retrieve the end effector pose
+        self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(7,))
+        # We can use the task utility to know if the task was executed correctly
+        self.tasks = hydra.utils.instantiate(tasks)
+        self.skill_name = None
+        self.state_type = None
+        self.max_episode_steps = 1000
+
+
+    def set_skill(self, skill):
+        self.skill_name = skill
+
+    def set_state_type(self, type):
+        self.state_type = type
+        self.obs_idx = self.get_valid_columns()
+
+    def reset(self):
+        obs = super().reset()
+        self.start_info = self.get_info()
+        return obs
+
+    def get_obs(self):
+        """Overwrite robot obs to only retrieve end effector position"""
+        robot_obs, robot_info = self.robot.get_observation()
+        return robot_obs[:7]
+
+    def get_camera_obs(self):
+        """Collect camera, robot and scene observations."""
+        assert self.cameras is not None
+        rgb_obs = {}
+        depth_obs = {}
+        for cam in self.cameras:
+            rgb, depth = cam.render()
+            rgb_obs[f"rgb_{cam.name}"] = rgb
+            depth_obs[f"depth_{cam.name}"] = depth
+        obs = {"rgb_obs": rgb_obs, "depth_obs": depth_obs}
+        return obs
+
+    def _success(self):
+        """Returns a boolean indicating if the task was performed correctly"""
+        current_info = self.get_info()
+        task_filter = [self.skill_name]
+        task_info = self.tasks.get_task_info_for_set(self.start_info, current_info, task_filter)
+        return self.skill_name in task_info
+
+    def _reward(self):
+        """Returns the reward function that will be used
+        for the RL algorithm"""
+        reward = int(self._success()) * 10
+        r_info = {"reward": reward}
+        return reward, r_info
+
+    def _termination(self):
+        """Indicates if the robot has reached a terminal state"""
+        success = self._success()
+        done = success
+        d_info = {"success": success}
+        return done, d_info
+
+    def get_valid_columns(self):
+        if 'joint' in self.state_type:
+            start, end = 8, 15
+        elif 'pos_ori' in self.state_type:
+            start, end = 1, 7
+        elif 'pos' in self.state_type:
+            start, end = 1, 4
+        elif 'ori' in self.state_type:
+            start, end = 4, 7
+        elif 'grip' in self.state_type:
+            start, end = 7, 8
+        return start-1, end-1
+
+    def step(self, action):
+        """Performing a relative action in the environment
+        input:
+            action: 7 tuple containing
+                    Position x, y, z.
+                    Angle in rad x, y, z.
+                    Gripper action
+                    each value in range (-1, 1)
+        output:
+            observation, reward, done info
+        """
+        # Transform gripper action to discrete space
+        env_action = action.copy()
+        env_action[-1] = (int(action[-1] >= 0) * 2) - 1
+        self.robot.apply_action(env_action)
+        for i in range(self.action_repeat):
+            self.p.stepSimulation(physicsClientId=self.cid)
+        obs = self.get_obs()
+        info = self.get_info()
+        reward, r_info = self._reward()
+        done, d_info = self._termination()
+        info.update(r_info)
+        info.update(d_info)
+        return obs, reward, done, info
