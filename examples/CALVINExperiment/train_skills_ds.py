@@ -46,14 +46,16 @@ def train_skills_ds(options):
             clfds.train_clf(train_dataset, val_dataset, lr=options.lr, max_epochs=options.max_epochs,\
                 batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'clf'))
         else:
-            clfds.train_ds(train_dataset, val_dataset, lr=options.lr, max_epochs=options.max_epochs,\
-                batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'ds'))
+            if os.path.exists(os.path.join(skill_output_dir, 'clf')):
+                clfds.load_clf_model(os.path.join(skill_output_dir, 'clf'))
+                clfds.train_ds(train_dataset, val_dataset, lr=options.lr, max_epochs=options.max_epochs,\
+                    batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'ds'))
     logger.info(f'Training complete. Trained DS models are saved in {os.path.join(options.ds_output_dir, options.state_type)} directory')
 
 if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("--skill-list-file", dest="skill_list_file", type='string',
-                      default='/work/dlclarge1/lagandua-refine-skills/calvin_demos/skillnames.txt',
+                      default='./examples/CALVINExperiment/skills_ds/skillnames_two.txt',
                       help='Path to a text file with all skill names')
     parser.add_option("--demos-dir", dest="demos_dir", type='string',
                       default='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',

@@ -60,6 +60,9 @@ class CLFDS(nn.Module):
         self.clf_model = torch.load(clf_file)
         self.reg_model = torch.load(reg_file)
 
+    def load_clf_model(self, clf_file):
+        self.clf_model = torch.load(clf_file)
+
     def train_clf(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname="clf_model", load_if_possible=False):
         if os.path.exists(fname) and load_if_possible:
             self.clf_model = torch.load(fname)
