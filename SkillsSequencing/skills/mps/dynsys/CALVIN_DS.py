@@ -4,15 +4,17 @@ import numpy as np
 from torch.utils.data import Dataset
 import torch
 
-from utils import plot_3d_trajectories
+from .utils import plot_3d_trajectories
 
 class CALVINDynSysDataset(Dataset):
     def __init__(self, skill, train=True, state_type='joint', 
                  demos_dir='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',
-                 goal_centered=False):
+                 goal_centered=False, dt=2/30, sampling_dt=2/30):
         self.skill = skill
         self.demos_dir = demos_dir
         self.goal_centered = goal_centered
+        self.dt = dt
+        self.sampling_dt = sampling_dt
         if train:
             fname = 'training'
         else:
@@ -20,7 +22,6 @@ class CALVINDynSysDataset(Dataset):
         data_file = glob.glob(os.path.join(self.demos_dir, self.skill, f'{fname}.npy'))[0]
         self.state_type = state_type
 
-        dt = 2 / 30
         start_idx, end_idx = self.get_valid_columns()
         self.X = np.load(data_file)[:,:,start_idx:end_idx]
         if self.goal_centered:
@@ -56,10 +57,9 @@ class CALVINDynSysDataset(Dataset):
         rand_idx = np.random.randint(0, len(self.X))
         true_x = self.X[rand_idx, :, :].numpy()
         x = true_x[0]
-        sampling_dt = 1 / 30
         for t in range(len(true_x)):
             sampled_path.append(x)
-            x_dot = self.dX[rand_idx, t, :].numpy()
-            x = x + sampling_dt * x_dot
+            delta_x = self.dX[rand_idx, t, :].numpy()
+            x = x + self.sampling_dt * delta_x
         sampled_path = np.array(sampled_path)
         plot_3d_trajectories(true_x, sampled_path)

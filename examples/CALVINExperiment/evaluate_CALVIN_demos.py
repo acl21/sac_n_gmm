@@ -20,9 +20,6 @@ import torch
 from torch.utils.data import DataLoader
 
 from envs.skill_env import SkillSpecificEnv
-from SkillsSequencing.skills.mps.dynsys.CLFDS import CLFDS
-from SkillsSequencing.skills.mps.dynsys.WSAQF import WSAQF
-from SkillsSequencing.skills.mps.dynsys.FNN import SimpleNN
 from SkillsSequencing.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
 
 import logging
@@ -43,39 +40,37 @@ class SkillEvaluator(object):
         self.skill_set = skill_set.split("\n")
         self.logger = logging.getLogger('SkillEvaluator')
 
-    def evaluate(self, ds, dataset, max_steps=500, sampling_dt=2/30, render=False, record=False):
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+    def evaluate(self, dataset, max_steps=500, sampling_dt=2/30, render=False, record=False):
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
+        step = 0
         for idx, (xi, d_xi) in enumerate(dataloader):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f'Test Trajectory {idx+1}/{len(dataset)}')
             x0 = xi.squeeze()[0, :].numpy()
-            goal = xi.squeeze()[-1, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
-            action = {'type': 'joint_abs', 'action': None}
-            action['action'] = np.append(x0, -1)
-            # pdb.set_trace()
+            action = np.array([x0[:3], x0[3:6], -1], dtype=object)
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
-            x = current_state
+            # x = current_state[start_idx:end_idx]
             # self.logger.info(f'Simulating with DS')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')
                 self.env.record()
-            for step in range(max_steps):
-                delta_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
-                delta_x = delta_x.detach().cpu().numpy().squeeze()
-                d_x = sampling_dt * delta_x
-                # pdb.set_trace()
-                action = {'type': 'joint_rel', 'action': None}
-                action['action'] = np.append(d_x, -1)
+            self.logger.info(f'Sampling dt {sampling_dt}')
+            for step in range(1, len(xi.squeeze())):
+                delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
+                # Relative action
+                # action = np.append(delta_x, -1) 
+                # Absolute action
+                new_x = xi.squeeze()[step-1, :].numpy() + delta_x
+                action = np.array([new_x[:3], new_x[3:6], -1], dtype=object)
                 observation, reward, done, info = self.env.step(action)
-                x = observation[start_idx:end_idx]
                 rollout_return += reward
                 if record:
                     self.env.record()
@@ -104,21 +99,17 @@ class SkillEvaluator(object):
 
             # Get train and validation datasets
             val_dataset = CALVINDynSysDataset(skill=skill, state_type=self.cfg.state_type, \
-                                              train=False, demos_dir=self.cfg.demos_dir, goal_centered=False)
-                                            #   dt=self.cfg.sampling_dt, sampling_dt=self.cfg.sampling_dt)
+                train=False, demos_dir=self.cfg.demos_dir, goal_centered=False, dt=1, sampling_dt=1)
 
             # Create and load models to evaluate
             dim = val_dataset.X.shape[-1]
-            clf_model = WSAQF(dim=dim, n_qfcn=1)
-            reg_model = SimpleNN(in_dim=dim, out_dim=dim, n_layers=(20, 20))
-            clfds = CLFDS(clf_model, reg_model, rho_0=0.1, kappa_0=0.0001)
-            clfds.load_models(clf_file=clf_file, reg_file=reg_file)
 
             logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')
             logger.info(f'Test/Val Data: {val_dataset.X.size()}')
             # Evaluate by simulating in the CALVIN environment
-            acc, avg_return, avg_len = self.evaluate(clfds, val_dataset, max_steps=self.cfg.max_steps, \
-                                                     render=self.cfg.render, record=self.cfg.record)
+            acc, avg_return, avg_len = self.evaluate(val_dataset, max_steps=self.cfg.max_steps, \
+                                                     render=self.cfg.render, record=self.cfg.record, \
+                                                     sampling_dt=self.cfg.sampling_dt)
             skill_accs[skill] = [str(acc), str(avg_return), str(avg_len)]
 
         # Write accuracies to a file
@@ -130,6 +121,7 @@ class SkillEvaluator(object):
 
 @hydra.main(config_path="./config", config_name="eval_ds")
 def main(cfg: DictConfig) -> None:
+    # pdb.set_trace()
     new_env_cfg = {**cfg.calvin_env.env}
     new_env_cfg["use_egl"] = False
     new_env_cfg["show_gui"] = False

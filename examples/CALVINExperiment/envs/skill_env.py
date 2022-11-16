@@ -40,7 +40,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
     def get_obs(self):
         """Overwrite robot obs to only retrieve end effector position"""
         robot_obs, robot_info = self.robot.get_observation()
-        return robot_obs[:7]
+        return robot_obs
 
     def get_camera_obs(self):
         """Collect camera, robot and scene observations."""
@@ -123,7 +123,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """
         # Transform gripper action to discrete space
         env_action = action.copy()
-        env_action[-1] = (int(action[-1] >= 0) * 2) - 1
+        env_action['action'][-1] = (int(action['action'][-1] >= 0) * 2) - 1
         self.robot.apply_action(env_action)
         for i in range(self.action_repeat):
             self.p.stepSimulation(physicsClientId=self.cid)

@@ -112,6 +112,7 @@ class CLFDS(nn.Module):
     def collect_ds_data(self, dataset):
         xi = dataset.X
         d_xi = dataset.dX
+        print(xi.shape, d_xi.shape)
         _, dV = self.clf_model.forward_with_grad(xi)
         B, C, dim = dV.shape
         psi = torch.matmul(dV.view(B, C, 1, dim), d_xi.view(B, C, dim, 1))
