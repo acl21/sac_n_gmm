@@ -1,5 +1,5 @@
 defaults:
-  - calvin_env: full_default
+  - calvin_env: config_data_collection
   - _self_
 
   - override hydra/job_logging: colorlog
@@ -21,18 +21,18 @@ state_type: 'pos_ori'
 
 # Evaluation params
 max_steps: 1000
-# sampling_dt: 1/30
+sampling_dt: 1
 
 
 # Environment params
 render: false
-record: true
+record: false
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}/eval_ds
+    dir: ${log_dir}/runs/${now:%Y-%m-%d-%H-%M-%S}/
   sweep:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}/eval_ds
+    dir: ${log_dir}/runs/${now:%Y-%m-%d-%H-%M-%S}/
     subdir: ${hydra.job.override_dirname}
   job:
     config:
