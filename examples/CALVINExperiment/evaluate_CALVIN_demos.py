@@ -25,9 +25,10 @@ from SkillsSequencing.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
 import logging
 logger = logging.getLogger(__name__)
 
+import wandb
 import pdb
 
-class SkillEvaluator(object):
+class SkillEvaluatorDemos(object):
     """Python wrapper that allows you to evaluate learned DS skills 
     in the CALVIN environment.
     """
@@ -38,7 +39,7 @@ class SkillEvaluator(object):
         f = open(cfg.skills_list, "r")
         skill_set = f.read()
         self.skill_set = skill_set.split("\n")
-        self.logger = logging.getLogger('SkillEvaluator')
+        self.logger = logging.getLogger('SkillEvaluatorDemos')
 
     def evaluate(self, dataset, max_steps=500, sampling_dt=2/30, render=False, record=False):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
@@ -52,7 +53,7 @@ class SkillEvaluator(object):
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
-            action = np.array([x0[:3], x0[3:6], -1], dtype=object)
+            action = self.env.prepare_action(x0, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
@@ -66,10 +67,11 @@ class SkillEvaluator(object):
             for step in range(1, len(xi.squeeze())):
                 delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
                 # Relative action
-                # action = np.append(delta_x, -1) 
+                # action = self.env.prepare_action(delta_x, type='rel')
                 # Absolute action
                 new_x = xi.squeeze()[step-1, :].numpy() + delta_x
-                action = np.array([new_x[:3], new_x[3:6], -1], dtype=object)
+                action = self.env.prepare_action(new_x, type='abs')
+                # action = np.array([new_x[:3], new_x[3:6], -1], dtype=object)
                 observation, reward, done, info = self.env.step(action)
                 rollout_return += reward
                 if record:
@@ -80,22 +82,36 @@ class SkillEvaluator(object):
                     break
             if record:
                 self.logger.info(f'Saving Robot Camera Obs')
-                self.env.save_and_reset_recording()
+                video_path = self.env.save_and_reset_recording()
+                if self.cfg.wandb:
+                    if info["success"]:
+                        status = 'Success'
+                    else:
+                        status = 'Fail'
+                    wandb.log({f"{self.env.skill_name} {status} {self.env.count}":wandb.Video(video_path, fps=30, format="gif")})
             if info["success"]:
                 succesful_rollouts += 1
                 self.logger.info('Success!')
             rollout_returns.append(rollout_return)
             rollout_lengths.append(step)
         acc = succesful_rollouts / len(dataset.X)
+        if self.cfg.wandb:
+            wandb.config.update({'val dataset size': len(dataset.X)})
+            wandb.log({'skill':self.env.skill_name, 'accuracy': acc*100, \
+                       'average_return': np.mean(rollout_returns), \
+                       'average_traj_len': np.mean(rollout_lengths)})
         return acc, np.mean(rollout_returns), np.mean(rollout_lengths)
 
     def run(self):
         skill_accs = {}
         for skill in self.skill_set:
+            if self.cfg.wandb:
+                config = {'state_type': self.cfg.state_type, \
+                        'sampling_dt': self.cfg.sampling_dt, \
+                        'max steps': self.cfg.max_steps}
+                wandb.init(project="ds-evaluation-demos", entity="in-ac", config=config, name=f'{skill}_{self.cfg.state_type}')
+
             self.env.set_skill(skill)
-            skill_model_dir = os.path.join(self.cfg.skills_dir, self.cfg.state_type, skill)
-            clf_file = os.path.join(skill_model_dir, 'clf')
-            reg_file = os.path.join(skill_model_dir, 'ds')
 
             # Get train and validation datasets
             val_dataset = CALVINDynSysDataset(skill=skill, state_type=self.cfg.state_type, \
@@ -111,7 +127,9 @@ class SkillEvaluator(object):
                                                      render=self.cfg.render, record=self.cfg.record, \
                                                      sampling_dt=self.cfg.sampling_dt)
             skill_accs[skill] = [str(acc), str(avg_return), str(avg_len)]
-
+            self.env.count = 0
+            if self.cfg.wandb:
+                wandb.finish()
         # Write accuracies to a file
         with open(os.path.join(self.env.outdir, f'skill_ds_acc_{self.cfg.state_type}.txt'), 'w') as f:
             writer = csv.writer(f)
@@ -135,7 +153,7 @@ def main(cfg: DictConfig) -> None:
     env.set_state_type(cfg.state_type)
     env.set_outdir(hydra.core.hydra_config.HydraConfig.get()['runtime']['output_dir'])
 
-    eval = SkillEvaluator(cfg, env)
+    eval = SkillEvaluatorDemos(cfg, env)
     eval.run()
 
 if __name__ == "__main__":

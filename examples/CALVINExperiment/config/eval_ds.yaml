@@ -11,28 +11,30 @@ slurm: false
 
 root: /home/lagandua/projects/refining-skill-sequences
 
+# WANDB Logging Params
+wandb: true
+
 # Skill Demos
 demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 skills_list: ${skills_dir}/skillnames_one.txt
-state_type: 'joint'
+state_type: 'pos'
 
 # Evaluation params
-max_steps: 1000
-sampling_dt: 0.06666
-
+max_steps: 240
+sampling_dt: 0.0666
 
 # Environment params
 render: false
-record: false
+record: true
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d-%H-%M-%S}/
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d-%H-%M-%S}/
+    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

@@ -28,6 +28,7 @@ from SkillsSequencing.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
 import logging
 logger = logging.getLogger(__name__)
 
+import wandb
 import pdb
 
 class SkillEvaluator(object):
@@ -55,14 +56,13 @@ class SkillEvaluator(object):
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
-            action = {'type': 'joint_abs', 'action': None}
-            action['action'] = np.append(x0, -1)
-            # pdb.set_trace()
+            action = self.env.prepare_action(x0, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
             x = current_state
+            # pdb.set_trace()
             # self.logger.info(f'Simulating with DS')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')
@@ -72,8 +72,7 @@ class SkillEvaluator(object):
                 delta_x = delta_x.detach().cpu().numpy().squeeze()
                 d_x = sampling_dt * delta_x
                 # pdb.set_trace()
-                action = {'type': 'joint_rel', 'action': None}
-                action['action'] = np.append(d_x, -1)
+                action = self.env.prepare_action(d_x, type='rel')
                 observation, reward, done, info = self.env.step(action)
                 x = observation[start_idx:end_idx]
                 rollout_return += reward
@@ -85,18 +84,34 @@ class SkillEvaluator(object):
                     break
             if record:
                 self.logger.info(f'Saving Robot Camera Obs')
-                self.env.save_and_reset_recording()
+                video_path = self.env.save_and_reset_recording()
+                if self.cfg.wandb:
+                    if info["success"]:
+                        status = 'Success'
+                    else:
+                        status = 'Fail'
+                    wandb.log({f"{self.env.skill_name} {status} {self.env.count}":wandb.Video(video_path, fps=30, format="gif")})
             if info["success"]:
                 succesful_rollouts += 1
                 self.logger.info('Success!')
             rollout_returns.append(rollout_return)
             rollout_lengths.append(step)
         acc = succesful_rollouts / len(dataset.X)
+        if self.cfg.wandb:
+            wandb.config.update({'val dataset size': len(dataset.X)})
+            wandb.log({'skill':self.env.skill_name, 'accuracy': acc*100, \
+                       'average_return': np.mean(rollout_returns), \
+                       'average_traj_len': np.mean(rollout_lengths)})
         return acc, np.mean(rollout_returns), np.mean(rollout_lengths)
 
     def run(self):
         skill_accs = {}
         for skill in self.skill_set:
+            if self.cfg.wandb:
+                config = {'state_type': self.cfg.state_type, \
+                        'sampling_dt': self.cfg.sampling_dt, \
+                        'max steps': self.cfg.max_steps}
+                wandb.init(project="ds-evaluation", entity="in-ac", config=config, name=f'{skill}_{self.cfg.state_type}')
             self.env.set_skill(skill)
             skill_model_dir = os.path.join(self.cfg.skills_dir, self.cfg.state_type, skill)
             clf_file = os.path.join(skill_model_dir, 'clf')
@@ -118,8 +133,12 @@ class SkillEvaluator(object):
             logger.info(f'Test/Val Data: {val_dataset.X.size()}')
             # Evaluate by simulating in the CALVIN environment
             acc, avg_return, avg_len = self.evaluate(clfds, val_dataset, max_steps=self.cfg.max_steps, \
-                                                     render=self.cfg.render, record=self.cfg.record)
+                                                     render=self.cfg.render, record=self.cfg.record, \
+                                                     sampling_dt=self.cfg.sampling_dt)
             skill_accs[skill] = [str(acc), str(avg_return), str(avg_len)]
+            self.env.count = 0
+            if self.cfg.wandb:
+                wandb.finish()
 
         # Write accuracies to a file
         with open(os.path.join(self.env.outdir, f'skill_ds_acc_{self.cfg.state_type}.txt'), 'w') as f:

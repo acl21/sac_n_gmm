@@ -8,6 +8,7 @@ os.sys.path.insert(0, main_dir)
 
 import sys
 from optparse import OptionParser
+from matplotlib import pyplot as plt 
 
 from SkillsSequencing.skills.mps.dynsys.CLFDS import CLFDS
 from SkillsSequencing.skills.mps.dynsys.WSAQF import WSAQF
@@ -20,6 +21,7 @@ import logging
 logging.basicConfig(filename=f'./examples/CALVINExperiment/logs/train_ds_{time_now}.log', encoding='utf-8', level=logging.INFO)
 logging.basicConfig(format='%(asctime)s %(message)s', datefmt='%d.%m.%Y %I:%M:%S %p')
 logger = logging.getLogger(__name__)
+import pdb
 
 def train_skills_ds(options):
     # Get skill list
@@ -38,24 +40,26 @@ def train_skills_ds(options):
         logger.info(f'Skill {idx}: {skill}, Train Data: {train_dataset.X.size()}, Val. Data: {val_dataset.X.size()}')
         # Create models to train
         dim = train_dataset.X.shape[-1]
+        # pdb.set_trace()
         clf_model = WSAQF(dim=dim, n_qfcn=1)
         reg_model = SimpleNN(in_dim=dim, out_dim=dim, n_layers=(20, 20))
         clfds = CLFDS(clf_model, reg_model, rho_0=0.1, kappa_0=0.0001)
+        # pdb.set_trace()
         # Training
         if options.train_clf:
             clfds.train_clf(train_dataset, val_dataset, lr=options.lr, max_epochs=options.max_epochs,\
-                batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'clf'))
+                batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'clf'), wandb_flag=options.wandb)
         else:
             if os.path.exists(os.path.join(skill_output_dir, 'clf')):
                 clfds.load_clf_model(os.path.join(skill_output_dir, 'clf'))
                 clfds.train_ds(train_dataset, val_dataset, lr=options.lr, max_epochs=options.max_epochs,\
-                    batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'ds'))
-    logger.info(f'Training complete. Trained DS models are saved in {os.path.join(options.ds_output_dir, options.state_type)} directory')
+                    batch_size=options.batch_size, fname=os.path.join(skill_output_dir, 'ds'), wandb_flag=options.wandb)
+        logger.info(f'Training complete. Trained DS models are saved in {os.path.join(options.ds_output_dir, options.state_type)} directory')
 
 if __name__ == "__main__":
     parser = OptionParser()
     parser.add_option("--skill-list-file", dest="skill_list_file", type='string',
-                      default='./examples/CALVINExperiment/skills_ds/skillnames_two.txt',
+                      default='./examples/CALVINExperiment/skills_ds/skillnames_one.txt',
                       help='Path to a text file with all skill names')
     parser.add_option("--demos-dir", dest="demos_dir", type='string',
                       default='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',
@@ -76,6 +80,8 @@ if __name__ == "__main__":
                       default=1e-3, help="Learning Rate")
     parser.add_option("--ds-output-dir", dest="ds_output_dir", type='string',
                       default='./examples/CALVINExperiment/skills_ds/', help="Path to the DS output directory")
+    parser.add_option("--wandb", dest="wandb", action='store_true', default=False,
+                      help="Should wandb be used for logging?")
 
     (options, args) = parser.parse_args(sys.argv)
     train_skills_ds(options)

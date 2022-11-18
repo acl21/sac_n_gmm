@@ -10,8 +10,8 @@
 # Please note the SLURM will not create this directory for you, and if it is missing, no logs will be saved.
 # You must create the directory yourself. In this case, that means you have to create the "logs" directory yourself.
 
-#SBATCH --output examples/CALVINExperiment/logs/%x-%A-testrun.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
-#SBATCH --error examples/CALVINExperiment/logs/%x-%A-testrun.err    # STDERR  short: -e logs/%x-%A-job_name.out
+#SBATCH --output examples/CALVINExperiment/logs/errouts/%x-%A-testrun.out   # STDOUT  %x and %A will be replaced by the job name and job id, respectively. short: -o logs/%x-%A-job_name.out
+#SBATCH --error examples/CALVINExperiment/logs/errouts/%x-%A-testrun.err    # STDERR  short: -e logs/%x-%A-job_name.out
 
 # Define the amount of memory required per node
 #SBATCH --mem 4GB
@@ -30,7 +30,6 @@ conda activate refine
 # Running the job
 start=`date +%s`
 
-# python examples/CALVINExperiment/evaluate_skills_ds.py --state-type pos
 python examples/CALVINExperiment/evaluate_CALVIN.py
 
 end=`date +%s`

@@ -11,6 +11,7 @@ def rho(xi, rho_0, kappa_0):
     nxi = torch.norm(xi, dim=-1)
     return rho_0 * (1 - torch.exp(- kappa_0 * nxi))
 
+import wandb
 
 class CLFDS(nn.Module):
     def __init__(self, clf_model, reg_model, w_clf=1e-4, rho_0=0.1, kappa_0=0.001):
@@ -63,7 +64,17 @@ class CLFDS(nn.Module):
     def load_clf_model(self, clf_file):
         self.clf_model = torch.load(clf_file)
 
-    def train_clf(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname="clf_model", load_if_possible=False):
+    def train_clf(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname="clf_model", load_if_possible=False, wandb_flag=False):
+        if wandb_flag:
+            config = {'learning_rate': lr,
+                      'batch_size': batch_size,
+                      'max_epochs': max_epochs,
+                      'optimizer': 'Adam'
+                     }
+            wandb.init(project='ds-training', entity='in-ac', name=f'{dataset.skill}_{dataset.state_type}_clf', \
+                       config=config)
+            wandb.watch(self.clf_model)
+
         if os.path.exists(fname) and load_if_possible:
             self.clf_model = torch.load(fname)
         else:
@@ -94,12 +105,16 @@ class CLFDS(nn.Module):
                     val_count += 1
                 epoch_val_cost /= val_count
                 val_cost_values.append(epoch_val_cost.detach().numpy())
+                if wandb_flag:
+                    wandb.log({'val_cost': epoch_val_cost.detach().numpy(), 'epoch':epoch})
                 opt.zero_grad(set_to_none=True)
 
                 if (epoch + 1) % 100 == 0:
                     torch.save(self.clf_model, fname)
                 epoch_cost /= count
                 cost_values.append(epoch_cost.detach().numpy())
+                if wandb_flag:
+                    wandb.log({'train_cost': epoch_cost.detach().numpy(), 'epoch':epoch})
                 print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost), end='\r')
 
             print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost))
@@ -108,6 +123,8 @@ class CLFDS(nn.Module):
             plt.legend()
             plt.savefig(f'{fname}.png', dpi=300)
             plt.close('all')
+            if wandb_flag:
+                wandb.finish()
 
     def collect_ds_data(self, dataset):
         xi = dataset.X
@@ -125,7 +142,17 @@ class CLFDS(nn.Module):
         dataset.dX = dX.detach()
         return dataset
 
-    def train_ds(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname='ds_model', load_if_possible=False):
+    def train_ds(self, dataset, val_dataset, lr=1e-3, max_epochs=1000, batch_size=100, fname='ds_model', load_if_possible=False, wandb_flag=False):
+        if wandb_flag:
+            config = {'learning_rate': lr,
+                      'batch_size': batch_size,
+                      'max_epochs': max_epochs,
+                      'optimizer': 'Adam'
+                     }
+            wandb.init(project='ds-training', entity='in-ac', name=f'{dataset.skill}_{dataset.state_type}_ds', \
+                       config=config)
+            wandb.watch(self.reg_model)
+
         if isinstance(self.reg_model, nn.Module):
             if os.path.exists(fname) and load_if_possible:
                 self.reg_model = torch.load(fname)
@@ -162,12 +189,16 @@ class CLFDS(nn.Module):
                             val_count += 1
                         epoch_val_cost /= val_count
                         val_cost_values.append(epoch_val_cost.detach().numpy())
+                        if wandb_flag:
+                            wandb.log({'val_cost': epoch_val_cost.detach().numpy(), 'epoch':epoch})
 
                     if (epoch + 1) % 100 == 0:
                         torch.save(self.reg_model, fname)
 
                     epoch_cost /= count
                     cost_values.append(epoch_cost.detach().numpy())
+                    if wandb_flag:
+                        wandb.log({'train_cost': epoch_cost.detach().numpy(), 'epoch':epoch})
                     print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost), end='\r')
 
                 print('epoch: %1d / %1d, cost: %.8f, val-cost: %.8f' % (epoch, max_epochs, epoch_cost, epoch_val_cost))
@@ -176,6 +207,8 @@ class CLFDS(nn.Module):
                 plt.legend()
                 plt.savefig(f'{fname}.png', dpi=300)
                 plt.close('all')
+                if wandb_flag:
+                    wandb.finish()
 
     def forward(self, x):
         return self.reg_model.forward(x)

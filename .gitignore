@@ -6,3 +6,5 @@ dist
 jupyter_logs/
 **/logs
 **.ipynb_checkpoints/
+wandb/
+.vscode/

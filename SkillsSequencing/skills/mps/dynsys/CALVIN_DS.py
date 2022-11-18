@@ -3,6 +3,8 @@ import os
 import numpy as np
 from torch.utils.data import Dataset
 import torch
+import pdb
+import pybullet as p
 
 from .utils import plot_3d_trajectories
 
@@ -24,6 +26,9 @@ class CALVINDynSysDataset(Dataset):
 
         start_idx, end_idx = self.get_valid_columns()
         self.X = np.load(data_file)[:,:,start_idx:end_idx]
+        # pdb.set_trace()
+        if self.state_type == 'ori':
+            self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
         if self.goal_centered:
             # Make X goal centered i.e., subtract each trajectory with its goal
             self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)

@@ -3,6 +3,8 @@ from calvin_env.envs.play_table_env import PlayTableSimEnv
 import hydra
 import imageio
 import os
+import cv2
+import numpy as np
 
 
 class SkillSpecificEnv(PlayTableSimEnv):
@@ -61,6 +63,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
     def record(self, obs_type='rgb', cam_type='static'):
         """Record RGB obsservation"""
         frame = self.get_camera_obs()[f'{obs_type}_obs'][f'{obs_type}_{cam_type}']
+        frame = cv2.resize(frame, (64, 64), interpolation = cv2.INTER_AREA)
         self.frames.append(frame)
 
     def reset_record(self):
@@ -75,6 +78,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         else:
             imageio.mimsave(path, self.frames, fps=30)
         self.reset_record()
+        return os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.count-1}.mp4')
 
     def _success(self):
         """Returns a boolean indicating if the task was performed correctly"""
@@ -109,6 +113,23 @@ class SkillSpecificEnv(PlayTableSimEnv):
         elif 'grip' in self.state_type:
             start, end = 7, 8
         return start-1, end-1
+
+    def prepare_action(self, input, type):
+        if self.state_type == 'joint':
+            action = {'type': f'joint_{type}', 'action': None}
+            action['action'] = np.append(input, -1)
+        elif self.state_type == 'pos':
+            action = {'type': f'cartesian_{type}', 'action': None}
+            action['action'] = np.append(input, np.append(np.zeros(3), -1))
+        elif self.state_type == 'ori':
+            action = {'type': f'cartesian_{type}', 'action': None}
+            action['action'] = np.append(np.zeros(3), np.append(input, -1))
+        elif self.state_type == 'pos_ori':
+            action = {'type': f'cartesian_{type}', 'action': None}
+            action['action'] = np.append(input, -1)
+
+        return action
+
 
     def step(self, action):
         """Performing a relative action in the environment
