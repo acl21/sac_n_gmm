@@ -30,8 +30,7 @@ conda activate refine
 # Running the job
 start=`date +%s`
 
-python examples/CALVINExperiment/train_skills_ds.py --clf --state-type joint --max-epochs 1500 --wandb
-python examples/CALVINExperiment/train_skills_ds.py --reg --state-type joint --max-epochs 1500 --wandb
+python examples/CALVINExperiment/train_skills.py
 
 end=`date +%s`
 runtime=$((end-start))

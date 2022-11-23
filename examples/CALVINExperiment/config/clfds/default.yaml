@@ -1,0 +1,16 @@
+_target_: SkillsSequencing.skills.mps.dynsys.CLFDS.CLFDS
+_recursive_: true
+clf_model:
+  _target_: SkillsSequencing.skills.mps.dynsys.WSAQF.WSAQF
+  dim: ${dim}
+  n_qfcn: 2
+reg_model:
+  _target_: SkillsSequencing.skills.mps.dynsys.FNN.SimpleNN
+  in_dim: ${dim}
+  out_dim: ${dim}
+  n_layers: [20, 20]
+  act: "leaky_relu"
+  out_act: none
+w_clf: 1e-4
+rho_0: 0.1
+kappa_0: 0.001
