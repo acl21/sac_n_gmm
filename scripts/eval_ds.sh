@@ -30,7 +30,7 @@ conda activate refine
 # Running the job
 start=`date +%s`
 
-python examples/CALVINExperiment/evaluate_CALVIN.py
+python examples/CALVINExperiment/eval_skills.py
 
 end=`date +%s`
 runtime=$((end-start))

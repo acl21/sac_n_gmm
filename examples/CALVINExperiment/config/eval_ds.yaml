@@ -1,5 +1,7 @@
 defaults:
   - calvin_env: config_data_collection
+  - dataset: calvin_ds
+  - clfds: default
   - _self_
 
   - override hydra/job_logging: colorlog
@@ -11,30 +13,38 @@ slurm: false
 
 root: /home/lagandua/projects/refining-skill-sequences
 
-# WANDB Logging Params
-wandb: true
-
 # Skill Demos
 demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 skills_list: ${skills_dir}/skillnames_one.txt
-state_type: 'pos'
+state_type: 'joint'
+dim: none
+
+# Dataset params:
+skill: none
+train: false # false to load validation dataset
+goal_centered: false
+dt: 0.0666
+sampling_dt: 0.0666
 
 # Evaluation params
 max_steps: 240
-sampling_dt: 0.0666
+ds_type: 'clfds' # or 'gmm'
 
 # Environment params
 render: false
-record: true
+record: false
+
+# WANDB Logging Params
+wandb: false
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:
