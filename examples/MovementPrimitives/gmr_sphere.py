@@ -1,8 +1,15 @@
 import os
+import sys
+from pathlib import Path
+
+cwd_path = Path(__file__).absolute().parents[0]
+parent_path = cwd_path.parents[0]
+sys.path.insert(0, parent_path.as_posix())
+sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix()) # Root
+
 import numpy as np
 from scipy.io import loadmat  # loading data from matlab
-from mayavi import mlab
-import matplotlib
+# from mayavi import mlab
 import matplotlib.pyplot as plt
 import matplotlib.colors as pltc
 from pymanopt.manifolds import Euclidean, Sphere, Product
@@ -10,7 +17,7 @@ from pymanopt.manifolds import Euclidean, Sphere, Product
 from SkillsSequencing.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
 from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
 from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+# from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
 
 
 if __name__ == '__main__':
@@ -18,8 +25,9 @@ if __name__ == '__main__':
 
     # Load data
     letter = 'C'
-    datapath = './2Dletters/'
-    data = loadmat(datapath + '%s.mat' % letter)
+    exp_dir = './examples/MovementPrimitives/'
+    datapath = '2Dletters/'
+    data = loadmat(exp_dir + datapath + '%s.mat' % letter)
     demos = [d['pos'][0][0].T for d in data['demos'][0]]
 
     # Parameters
@@ -71,7 +79,7 @@ if __name__ == '__main__':
     nb_clusters = 3
 
     # If model is saved, load it
-    filename = './gmm_sphere.npz'
+    filename = exp_dir + '/gmm_sphere.npz'
     if os.path.isfile(filename):
         gmm = np.load(filename)
         gmm.allow_pickle = True
@@ -100,33 +108,35 @@ if __name__ == '__main__':
     mu_gmr, sigma_gmr, H = manifold_gmr(Xt, manifold, gmm_means, gmm_covariances, gmm_priors)
 
     # Plots
+    # mlab.options.offscreen = True
     # Plot sphere
-    mlab.figure(1, bgcolor=(1, 1, 1), fgcolor=(0, 0, 0), size=(700, 700))
-    fig = mlab.gcf()
-    mlab.clf()
-    plot_sphere(figure=fig)
+    # mlab.figure(1, bgcolor=(1, 1, 1), fgcolor=(0, 0, 0), size=(700, 700))
+    # fig = mlab.gcf()
+    # mlab.clf()
+    # plot_sphere(figure=fig)
     # Plot data on the sphere
-    for p in range(nb_samples):
-        mlab.points3d(Y[p * nb_data:(p + 1) * nb_data, 0],
-                      Y[p * nb_data:(p + 1) * nb_data, 1],
-                      Y[p * nb_data:(p + 1) * nb_data, 2],
-                      color=(0., 0., 0.),
-                      scale_factor=0.03)
+    # for p in range(nb_samples):
+    #     mlab.points3d(Y[p * nb_data:(p + 1) * nb_data, 0],
+    #                   Y[p * nb_data:(p + 1) * nb_data, 1],
+    #                   Y[p * nb_data:(p + 1) * nb_data, 2],
+    #                   color=(0., 0., 0.),
+    #                   scale_factor=0.03)
 
     # Plot Gaussians
-    for k in range(nb_clusters):
-        plot_gaussian_mesh_on_tangent_plane(gmm_means[k, 1], gmm_covariances[k, 1:, 1:], color=(0.5, 0, 0.2))
+    # for k in range(nb_clusters):
+    #     plot_gaussian_mesh_on_tangent_plane(gmm_means[k, 1], gmm_covariances[k, 1:, 1:], color=(0.5, 0, 0.2))
 
-    # Plot GMR trajectory
-    for n in range(nb_data + nb_data_sup):
-        # Plot mean and covariance
-        plot_gaussian_mesh_on_tangent_plane(mu_gmr[n], sigma_gmr[n], color=(0.20, 0.54, 0.93))
-        # Plot mean only
-        # mlab.points3d(mu_gmr[n, 0], mu_gmr[n, 1], mu_gmr[n, 2],
-        #               color=(0.20, 0.54, 0.93),
+    # # Plot GMR trajectory
+    # for n in range(nb_data + nb_data_sup):
+    #     # Plot mean and covariance
+    #     plot_gaussian_mesh_on_tangent_plane(mu_gmr[n], sigma_gmr[n], color=(0.20, 0.54, 0.93))
+    #     # Plot mean only
+    #     # mlab.points3d(mu_gmr[n, 0], mu_gmr[n, 1], mu_gmr[n, 2],
+    #     #               color=(0.20, 0.54, 0.93),
         #               scale_factor=0.03)
-    mlab.view(30, 120)
-    mlab.show()
+    # mlab.view(30, 120)
+    # mlab.savefig('Figure0.png')
+    # mlab.show()
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
@@ -141,6 +151,7 @@ if __name__ == '__main__':
     plt.ylabel('$y_1$', fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
+    plt.savefig(exp_dir + 'Figure1.png', dpi=100)
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
@@ -155,7 +166,8 @@ if __name__ == '__main__':
     plt.ylabel('$y_2$', fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(exp_dir + 'Figure2.png', dpi=100)
+    # plt.show()
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
@@ -170,4 +182,5 @@ if __name__ == '__main__':
     plt.ylabel('$y_3$', fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
-    plt.show()
+    plt.savefig(exp_dir + 'Figure3.png', dpi=100)
+    # plt.show()
