@@ -40,7 +40,7 @@ class SkillEvaluator(object):
         self.skill_set = skill_set.split("\n")
         self.logger = logging.getLogger('SkillEvaluator')
 
-    def evaluate(self, ds, dataset, max_steps=500, sampling_dt=2/30, render=False, record=False):
+    def evaluate(self, ds, dataset, max_steps, sampling_dt, render=False, record=False):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
@@ -51,45 +51,65 @@ class SkillEvaluator(object):
             goal = xi.squeeze()[-1, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
+            if self.cfg.temp:
+                self.env.state_type = 'pos_ori'
+                start_idx, end_idx = 0, 6
+
             current_state = observation[start_idx:end_idx]
             action = self.env.prepare_action(x0, type='abs')
+            # pdb.set_trace()
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
-            x = current_state
+            if self.cfg.temp:
+                start_idx, end_idx = 0, 3
+                goal = goal[start_idx:end_idx]
+                self.env.state_type = 'pos'
+                ori = current_state[3:6]
+            x = observation[start_idx:end_idx]
             # pdb.set_trace()
             # self.logger.info(f'Simulating with DS')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')
-                self.env.record()
+                self.env.record_frame()
             for step in range(max_steps):
                 if self.ds_type == 'clfds':
-                    delta_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
-                    delta_x = delta_x.detach().cpu().numpy().squeeze()
+                    d_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
+                    d_x = d_x.detach().cpu().numpy().squeeze()
                 else:
-                    delta_x = None
-                d_x = sampling_dt * delta_x
+                    d_x = None
+                delta_x = sampling_dt * d_x
                 # pdb.set_trace()
-                action = self.env.prepare_action(d_x, type='rel')
+                if self.cfg.temp:
+                    # pdb.set_trace()
+                    new_x = x + delta_x
+                    # action = {'type': f'cartesian_abs', 'action': None}
+                    # action['action'] = np.append(new_x, np.append(ori, -1))
+
+                    action = {'type': f'cartesian_rel', 'action': None}
+                    action['action'] = np.append(delta_x, np.append(np.zeros(3), -1))
+                else:
+                    action = self.env.prepare_action(delta_x, type='rel')
                 observation, reward, done, info = self.env.step(action)
                 x = observation[start_idx:end_idx]
                 rollout_return += reward
                 if record:
-                    self.env.record()
+                    self.env.record_frame()
                 if render:
                     self.env.render()
                 if done:
                     break
             if record:
                 self.logger.info(f'Saving Robot Camera Obs')
-                video_path = self.env.save_and_reset_recording()
+                video_path = self.env.save_recorded_frames()
+                self.env.reset_recorded_frames()
                 if self.cfg.wandb:
                     if info["success"]:
                         status = 'Success'
                     else:
                         status = 'Fail'
-                    wandb.log({f"{self.env.skill_name} {status} {self.env.count}":wandb.Video(video_path, fps=30, format="gif")})
+                    wandb.log({f"{self.env.skill_name} {status} {self.env.record_count}":wandb.Video(video_path, fps=30, format="gif")})
             if info["success"]:
                 succesful_rollouts += 1
                 self.logger.info('Success!')
@@ -116,7 +136,8 @@ class SkillEvaluator(object):
 
             # Get validation dataset
             self.cfg.dataset.skill = skill
-            self.cfg.dataset.train = False
+            if self.cfg.temp:
+                self.cfg.dataset.state_type = 'pos_ori'
             val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
             # Create and load models to evaluate
@@ -124,7 +145,7 @@ class SkillEvaluator(object):
             if self.ds_type == 'clfds':
                 clf_file = os.path.join(ds_model_dir, 'clf')
                 reg_file = os.path.join(ds_model_dir, 'ds')
-                ds = hydra.utils.instantiate(self.cfg.clfds)
+                ds = hydra.utils.instantiate(self.cfg.dyn_sys)
                 ds.load_models(clf_file=clf_file, reg_file=reg_file)
             else:
                 ds = None

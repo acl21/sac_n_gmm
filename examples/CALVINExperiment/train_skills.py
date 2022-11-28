@@ -46,7 +46,7 @@ class SkillTrainer(object):
             self.cfg.dim = train_dataset.X.shape[-1]
             # Train DS
             if self.cfg.ds_type == 'clfds':
-                clfds = hydra.utils.instantiate(self.cfg.clfds)
+                clfds = hydra.utils.instantiate(self.cfg.dyn_sys)
                 clfds.train_clf(train_dataset, val_dataset, lr=self.cfg.lr, max_epochs=self.cfg.max_epochs,\
                 batch_size=self.cfg.batch_size, fname=os.path.join(self.ds_out_dir, 'clf'), wandb_flag=self.cfg.wandb)
                 assert os.path.exists(os.path.join(self.ds_out_dir, 'clf')), f"CLF file not found at {os.path.join(self.ds_out_dir)}"
@@ -54,7 +54,8 @@ class SkillTrainer(object):
                 clfds.train_ds(train_dataset, val_dataset, lr=self.cfg.lr, max_epochs=self.cfg.max_epochs,\
                     batch_size=self.cfg.batch_size, fname=os.path.join(self.ds_out_dir, 'ds'), wandb_flag=self.cfg.wandb)
             else:
-                None
+                gmm = hydra.utils.instantiate(self.cfg.dyn_sys)
+                pdb.set_trace()
         self.logger.info(f'Training complete. Trained DS models are saved in the {os.path.join(self.ds_out_dir)} directory')
 
 @hydra.main(config_path="./config", config_name="train_ds")

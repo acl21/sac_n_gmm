@@ -22,7 +22,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
 
         self.frames = []
         self.outdir = None
-        self.count = 1
+        self.record_count = 1
 
 
     def set_skill(self, skill):
@@ -60,25 +60,24 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """Set output directory where recordings can/will be saved"""
         self.outdir = outdir
 
-    def record(self, obs_type='rgb', cam_type='static'):
+    def record_frame(self, obs_type='rgb', cam_type='static', size=200):
         """Record RGB obsservation"""
         frame = self.get_camera_obs()[f'{obs_type}_obs'][f'{obs_type}_{cam_type}']
-        frame = cv2.resize(frame, (64, 64), interpolation = cv2.INTER_AREA)
+        frame = cv2.resize(frame, (size, size), interpolation = cv2.INTER_AREA)
         self.frames.append(frame)
 
-    def reset_record(self):
+    def reset_recorded_frames(self):
         """Reset recorded frames"""
         self.frames = []
 
-    def save_and_reset_recording(self, path=None):
+    def save_recorded_frames(self, path=None):
         """Save recorded frames as a video"""
         if path is None:
-            imageio.mimsave(os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.count}.mp4'), self.frames, fps=30)
-            self.count += 1
+            imageio.mimsave(os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count}.mp4'), self.frames, fps=30)
+            self.record_count += 1
         else:
             imageio.mimsave(path, self.frames, fps=30)
-        self.reset_record()
-        return os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.count-1}.mp4')
+        return os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count-1}.mp4')
 
     def _success(self):
         """Returns a boolean indicating if the task was performed correctly"""

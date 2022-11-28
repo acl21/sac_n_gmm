@@ -51,12 +51,20 @@ class SkillEvaluatorDemos(object):
             x0 = xi.squeeze()[0, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
+            if self.cfg.temp:
+                self.env.state_type = 'pos_ori'
+                start_idx, end_idx = 0, 6
             current_state = observation[start_idx:end_idx]
             action = self.env.prepare_action(x0, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             while np.linalg.norm(current_state - x0) > 0.005:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
+            if self.cfg.temp:
+                start_idx, end_idx = 0, 3
+                goal = current_state[start_idx:end_idx]
+                self.env.state_type = 'pos'
+                ori = current_state[3:6]
             # x = current_state[start_idx:end_idx]
             # self.logger.info(f'Simulating with DS')
             if record:
@@ -66,7 +74,11 @@ class SkillEvaluatorDemos(object):
                 delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
                 # Absolute action
                 new_x = xi.squeeze()[step-1, :].numpy() + delta_x
-                action = self.env.prepare_action(new_x, type='abs')
+                if self.cfg.temp:
+                    action = {'type': f'cartesian_abs', 'action': None}
+                    action['action'] = np.append(new_x[:3], np.append(ori, -1))
+                else:
+                    action = self.env.prepare_action(new_x, type='abs')
                 observation, reward, done, info = self.env.step(action)
                 rollout_return += reward
                 if record:
@@ -110,7 +122,8 @@ class SkillEvaluatorDemos(object):
 
             # Get validation dataset
             self.cfg.dataset.skill = skill
-            self.cfg.dataset.train = False
+            if self.cfg.temp:
+                self.cfg.dataset.state_type = 'pos_ori'
             val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
             logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')

@@ -1,6 +1,5 @@
 defaults:
-  - clfds: default
-  - gmm: default
+  - dyn_sys: clfds
   - dataset: calvin_ds
   - _self_
 
@@ -13,16 +12,13 @@ slurm: false
 
 root: /home/lagandua/projects/refining-skill-sequences
 
-# WANDB Logging Params
-wandb: true
-
 # Skill Demos
 demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_close.txt
-state_type: 'joint'
+skills_list: ${skills_dir}/skillnames_two.txt
+state_type: 'pos'
 dim: none
 
 # Dataset params:
@@ -33,13 +29,21 @@ dt: 0.0666
 sampling_dt: 0.0666
 
 # DS params
-ds_type: 'clfds' # or 'gmm'
+ds_type: 'clfds'
+# ds_type: 'gmm'
+
+# GMM params
+gmm_type: base
+gmm_components: 3
+plot_gmr: false
 
 # Training params
 lr: 1e-3
 max_epochs: 3000
 batch_size: 100
 
+# WANDB Logging Params
+wandb: false
 
 hydra:
   run:
