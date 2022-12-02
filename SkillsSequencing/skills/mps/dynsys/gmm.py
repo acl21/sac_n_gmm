@@ -1,13 +1,11 @@
 import numpy as np
-from mayavi import mlab
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
 from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
 from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
-
 
 import wandb
+import logging
 
 class ManifoldGMM(object):
     def __init__(self, n_components=3, plot_with_mlab=False):
@@ -27,6 +25,7 @@ class ManifoldGMM(object):
         # Misc
         self.skills_dir = None
         self.logs_outdir = None
+        self.logger = logging.getLogger('ManifoldGMM')
 
     def make_manifold(self, dim):
         if self.state_type in ['pos', 'joint']:
@@ -40,7 +39,17 @@ class ManifoldGMM(object):
         manifold = Product([in_manifold, out_manifold])
         return manifold
 
-    def preprocess_data(self, X, Y):
+    def preprocess_data(self, dataset):
+        # Stack position and velocity data
+        demos_xdx = [np.hstack([dataset.X[i], dataset.dX[i]]) for i in range(dataset.X.shape[0])]
+        # Stack demos
+        demos_np = demos_xdx[0]
+        for i in range(1, dataset.X.shape[0]):
+            demos_np = np.vstack([demos_np, demos_xdx[i]])
+
+        X = demos_np[:, :self.dim]
+        Y = demos_np[:, self.dim:]
+
         if self.state_type == 'pos':
             # Normalize to have range [-1, 1]
             X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
@@ -58,14 +67,14 @@ class ManifoldGMM(object):
             data[n] = [X[n], Y[n]]
         return data
 
-    def load_params(self, filename='gmm_params.npz'):
+    def load_params(self, filename='/gmm_params.npz'):
         gmm = np.load(self.skills_dir + filename)
         gmm.allow_pickle = True
         self.means = np.array(gmm['gmm_means'])
         self.covariances = np.array(gmm['gmm_covariances'])
         self.priors = np.array(gmm['gmm_priors'])
 
-    def save_params(self, filename='gmm_params.npz'):
+    def save_params(self, filename='/gmm_params.npz'):
         np.savez(self.skills_dir + filename, gmm_means=self.means, \
                  gmm_covariances=self.covariances, \
                  gmm_priors=self.priors)
@@ -75,8 +84,7 @@ class ManifoldGMM(object):
         self.state_type = self.dataset.state_type
         self.dim = self.dataset.X.numpy().shape[-1]
         self.manifold = self.make_manifold(self.dim)
-        self.data = self.preprocess_data(X=self.dataset.X.numpy(),\
-                                         Y=self.dataset.dX.numpy())
+        self.data = self.preprocess_data(dataset)
 
     def train(self, dataset, wandb_flag=False):
         # Dataset
@@ -93,7 +101,8 @@ class ManifoldGMM(object):
         self.means, self.covariances, self.priors, self.assignments = manifold_gmm_em(self.manifold, self.data, self.n_comp,
                                                                       initial_means=km_means,
                                                                       initial_covariances=init_covariances,
-                                                                      initial_priors=init_priors)
+                                                                      initial_priors=init_priors,
+                                                                      logger = self.logger)
 
         # Save GMM params
         self.save_params()
@@ -115,6 +124,10 @@ class ManifoldGMM(object):
         return dx
 
     def plot_gmm_mlab(self, input_space=True):
+        from mayavi import mlab
+        from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+
+
         if input_space:
             dim = 0
         else:

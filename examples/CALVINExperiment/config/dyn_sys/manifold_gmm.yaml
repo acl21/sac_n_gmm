@@ -1,3 +1,4 @@
-_target_: SkillsSequencing.skills.mps.dynsys.gmr.gmm.ManifoldGMM
+_target_:  SkillsSequencing.skills.mps.dynsys.gmm.ManifoldGMM
+_recursive_: true
 n_components: ${gmm_components}
 plot_with_mlab: ${plot_with_mlab}

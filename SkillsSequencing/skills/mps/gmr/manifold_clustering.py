@@ -44,7 +44,7 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
 
 
 def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covariances=None, initial_priors=None,
-                    nb_iter_max=100, max_diff_ll=1e-5, regularization_factor=1e-10):
+                    nb_iter_max=100, max_diff_ll=1e-5, regularization_factor=1e-10, logger=None):
     """
     EM algorithm for a GMM on a Riemannian manifold
 
@@ -62,6 +62,7 @@ def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covar
     :param nb_iter_max: max number of iterations for EM
     :param max_diff_ll: threshold of log likelihood change for convergence
     :param regularization_factor: regularization for the covariance matrices
+    :param logger: logger object optionally provided by the calling function
 
     Returns
     ----------
@@ -126,11 +127,17 @@ def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covar
         # Check for convergence
         if it > nb_min_steps:
             if LL[it] - LL[it - 1] < max_diff_ll:
-                print('Converged after %d iterations: %.3e' % (it, LL[it]))
+                if logger == None:
+                    print('Converged after %d iterations: %.3e' % (it, LL[it]))
+                else:
+                    logger.info('Converged after %d iterations: %.3e' % (it, LL[it]))
 
                 return means, covariances, priors, GAMMA
 
-    print("GMM did not converge before reaching the maximum number of iterations.")
+    if logger == None:
+        print("GMM did not converge before reaching the maximum number of iterations.")
+    else:
+        logger.info("GMM did not converge before reaching the maximum number of iterations.")
     return means, covariances, priors, GAMMA
 
 
