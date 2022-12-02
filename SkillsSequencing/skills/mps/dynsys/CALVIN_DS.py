@@ -9,9 +9,10 @@ import pybullet as p
 from .utils import plot_3d_trajectories
 
 class CALVINDynSysDataset(Dataset):
-    def __init__(self, skill, train=True, state_type='joint', 
+    def __init__(self, skill, train=True, state_type='joint',
                  demos_dir='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',
-                 goal_centered=False, dt=2/30, sampling_dt=1/30):
+                 goal_centered=False, dt=2/30, sampling_dt=1/30,
+                 is_quaternion=False):
         self.skill = skill
         self.demos_dir = demos_dir
         self.goal_centered = goal_centered
@@ -26,9 +27,10 @@ class CALVINDynSysDataset(Dataset):
 
         start_idx, end_idx = self.get_valid_columns()
         self.X = np.load(data_file)[:,:,start_idx:end_idx]
-        # pdb.set_trace()
-        if self.state_type == 'ori':
+
+        if self.state_type == 'ori' and is_quaternion:
             self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
+
         if self.goal_centered:
             # Make X goal centered i.e., subtract each trajectory with its goal
             self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)

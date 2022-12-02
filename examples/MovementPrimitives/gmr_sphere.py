@@ -9,15 +9,14 @@ sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix()) # Root
 
 import numpy as np
 from scipy.io import loadmat  # loading data from matlab
-# from mayavi import mlab
+from mayavi import mlab
 import matplotlib.pyplot as plt
-import matplotlib.colors as pltc
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
 from SkillsSequencing.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
 from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
 from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-# from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
 
 
 if __name__ == '__main__':
@@ -80,7 +79,7 @@ if __name__ == '__main__':
 
     # If model is saved, load it
     filename = exp_dir + '/gmm_sphere.npz'
-    if os.path.isfile(filename):
+    if os.path.isfile(filename) and False:
         gmm = np.load(filename)
         gmm.allow_pickle = True
         gmm_means = np.array(gmm['gmm_means'])
@@ -108,35 +107,34 @@ if __name__ == '__main__':
     mu_gmr, sigma_gmr, H = manifold_gmr(Xt, manifold, gmm_means, gmm_covariances, gmm_priors)
 
     # Plots
-    # mlab.options.offscreen = True
     # Plot sphere
-    # mlab.figure(1, bgcolor=(1, 1, 1), fgcolor=(0, 0, 0), size=(700, 700))
-    # fig = mlab.gcf()
-    # mlab.clf()
-    # plot_sphere(figure=fig)
+    mlab.figure(1, bgcolor=(1, 1, 1), fgcolor=(0, 0, 0), size=(700, 700))
+    fig = mlab.gcf()
+    mlab.clf()
+    plot_sphere(figure=fig)
     # Plot data on the sphere
-    # for p in range(nb_samples):
-    #     mlab.points3d(Y[p * nb_data:(p + 1) * nb_data, 0],
-    #                   Y[p * nb_data:(p + 1) * nb_data, 1],
-    #                   Y[p * nb_data:(p + 1) * nb_data, 2],
-    #                   color=(0., 0., 0.),
-    #                   scale_factor=0.03)
+    for p in range(nb_samples):
+        mlab.points3d(Y[p * nb_data:(p + 1) * nb_data, 0],
+                      Y[p * nb_data:(p + 1) * nb_data, 1],
+                      Y[p * nb_data:(p + 1) * nb_data, 2],
+                      color=(0., 0., 0.),
+                      scale_factor=0.03)
 
-    # Plot Gaussians
+    # # Plot Gaussians
     # for k in range(nb_clusters):
     #     plot_gaussian_mesh_on_tangent_plane(gmm_means[k, 1], gmm_covariances[k, 1:, 1:], color=(0.5, 0, 0.2))
 
-    # # Plot GMR trajectory
+    # # # Plot GMR trajectory
     # for n in range(nb_data + nb_data_sup):
     #     # Plot mean and covariance
     #     plot_gaussian_mesh_on_tangent_plane(mu_gmr[n], sigma_gmr[n], color=(0.20, 0.54, 0.93))
     #     # Plot mean only
-    #     # mlab.points3d(mu_gmr[n, 0], mu_gmr[n, 1], mu_gmr[n, 2],
-    #     #               color=(0.20, 0.54, 0.93),
-        #               scale_factor=0.03)
-    # mlab.view(30, 120)
+    #     mlab.points3d(mu_gmr[n, 0], mu_gmr[n, 1], mu_gmr[n, 2],
+    #                   color=(0.20, 0.54, 0.93),
+    #                   scale_factor=0.03)
+    mlab.view(30, 120)
     # mlab.savefig('Figure0.png')
-    # mlab.show()
+    mlab.show()
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):

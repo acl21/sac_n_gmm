@@ -1,6 +1,0 @@
-gmm_components: ${gmm_components}
-gmm_type: ${gmm_type}
-plot_gmr: ${plot_gmr}
-cfg:
-  _target_: SkillsSequencing.skills.mps.dynsys.gmm.GMM
-  n_components: ${dim}

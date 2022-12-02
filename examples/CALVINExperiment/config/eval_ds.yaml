@@ -28,6 +28,7 @@ train: false # false to load validation dataset
 goal_centered: false
 dt: 0.0666
 sampling_dt: 0.0333
+is_quaternion: false
 
 # Evaluation and DS params
 max_steps: 240

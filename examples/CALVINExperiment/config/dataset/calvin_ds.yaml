@@ -6,3 +6,4 @@ demos_dir: ${demos_dir}
 goal_centered: ${goal_centered}
 dt: ${dt}
 sampling_dt: ${sampling_dt}
+is_quaternion: ${is_quaternion} 

@@ -1,0 +1,3 @@
+_target_: SkillsSequencing.skills.mps.dynsys.gmr.gmm.ManifoldGMM
+n_components: ${gmm_components}
+plot_with_mlab: ${plot_with_mlab}
