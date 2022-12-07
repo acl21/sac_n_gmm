@@ -249,5 +249,5 @@ def plot_gaussian_mesh_on_tangent_plane(mu, sigma, color, offset: np.ndarray = n
     contour = Rc.dot(contour) + offset[:, None]  # Points rotated in Tangent Space of mu
 
     mlab.mesh(x, y, z, color=color, opacity=0.15)
-    mlab.plot3d(contour[0, :], contour[1, :], contour[2, :], color=color, line_width=3, tube_radius=None, opacity=1.)
+    # mlab.plot3d(contour[0, :], contour[1, :], contour[2, :], color=color, line_width=3, tube_radius=None, opacity=1.)
 
