@@ -17,7 +17,7 @@ demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_one.txt
+skills_list: ${skills_dir}/skillnames_close.txt
 state_type: 'pos'
 dim: none
 
@@ -31,7 +31,7 @@ is_quaternion: false
 
 # DS params
 # ds_type: 'clfds'
-ds_type: 'gmm'
+# ds_type: 'gmm'
 
 # GMM params
 gmm_components: 3
@@ -39,7 +39,7 @@ plot_with_mlab: false
 
 # Training params
 lr: 1e-3
-max_epochs: 3000
+max_epochs: 1500
 batch_size: 100
 
 # WANDB Logging Params

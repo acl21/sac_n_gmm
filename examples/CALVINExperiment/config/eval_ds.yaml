@@ -1,7 +1,7 @@
 defaults:
   - calvin_env: config_data_collection
-  - dataset: calvin_ds
-  - dyn_sys: clfds
+  - dataset: calvin_ds 
+  - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
 
   - override hydra/job_logging: colorlog
@@ -32,22 +32,21 @@ is_quaternion: false
 
 # Evaluation and DS params
 max_steps: 240
-ds_type: 'clfds' 
+# ds_type: 'clfds' 
 # ds_type: 'gmm'
 
 # GMM params
-gmm_type: base
 gmm_components: 3
-plot_gmr: true
+plot_with_mlab: false
 
 # Environment params
 render: false
-record: true
+record: false
 
 # WANDB Logging Params
 wandb: false
 
-temp: true
+temp: false
 
 hydra:
   run:

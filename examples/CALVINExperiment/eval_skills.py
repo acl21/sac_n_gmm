@@ -34,7 +34,6 @@ class SkillEvaluator(object):
     def __init__(self, cfg, env):
         self.cfg = cfg
         self.env = env
-        self.ds_type = self.cfg.ds_type
         f = open(cfg.skills_list, "r")
         skill_set = f.read()
         self.skill_set = skill_set.split("\n")
@@ -51,22 +50,20 @@ class SkillEvaluator(object):
             goal = xi.squeeze()[-1, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
-            if self.cfg.temp:
-                self.env.state_type = 'pos_ori'
-                start_idx, end_idx = 0, 6
-
             current_state = observation[start_idx:end_idx]
-            action = self.env.prepare_action(x0, type='abs')
-            # pdb.set_trace()
+            temp = np.append(x0, np.append(observation[start_idx+3:end_idx+3], -1))
+            action = self.env.prepare_action(temp, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            while np.linalg.norm(current_state - x0) > 0.005:
+            count = 0
+            while np.linalg.norm(current_state - x0) > 0.008:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
-            if self.cfg.temp:
-                start_idx, end_idx = 0, 3
-                goal = goal[start_idx:end_idx]
-                self.env.state_type = 'pos'
-                ori = current_state[3:6]
+                count += 1
+                if count >= 200:
+                    # x0 = current_state
+                    print(x0, current_state, np.linalg.norm(current_state - x0))
+                    self.logger.info("CALVIN is struggling to place the EE at the right initial pose")
+                    # assert 1==0, "CALVIN is struggling to place the EE at the right initial pose"
             x = observation[start_idx:end_idx]
             # pdb.set_trace()
             # self.logger.info(f'Simulating with DS')
@@ -74,23 +71,15 @@ class SkillEvaluator(object):
                 self.logger.info(f'Recording Robot Camera Obs')
                 self.env.record_frame()
             for step in range(max_steps):
-                if self.ds_type == 'clfds':
+                if ds.name == 'clfds':
                     d_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
                     d_x = d_x.detach().cpu().numpy().squeeze()
                 else:
-                    d_x = None
+                    d_x = ds.predict_dx(x-goal)
                 delta_x = sampling_dt * d_x
-                # pdb.set_trace()
-                if self.cfg.temp:
-                    # pdb.set_trace()
-                    new_x = x + delta_x
-                    # action = {'type': f'cartesian_abs', 'action': None}
-                    # action['action'] = np.append(new_x, np.append(ori, -1))
-
-                    action = {'type': f'cartesian_rel', 'action': None}
-                    action['action'] = np.append(delta_x, np.append(np.zeros(3), -1))
-                else:
-                    action = self.env.prepare_action(delta_x, type='rel')
+                new_x = x + delta_x
+                temp = np.append(new_x, np.append(observation[start_idx+3:end_idx+3], -1))
+                action = self.env.prepare_action(temp, type='abs')
                 observation, reward, done, info = self.env.step(action)
                 x = observation[start_idx:end_idx]
                 rollout_return += reward
@@ -132,7 +121,6 @@ class SkillEvaluator(object):
                         'max steps': self.cfg.max_steps}
                 wandb.init(project="ds-evaluation", entity="in-ac", config=config, name=f'{skill}_{self.cfg.state_type}')
             self.env.set_skill(skill)
-            ds_model_dir = os.path.join(self.cfg.skills_dir, self.cfg.state_type, skill, self.cfg.ds_type)
 
             # Get validation dataset
             self.cfg.dataset.skill = skill
@@ -142,13 +130,18 @@ class SkillEvaluator(object):
 
             # Create and load models to evaluate
             self.cfg.dim = val_dataset.X.shape[-1]
-            if self.ds_type == 'clfds':
+            ds = hydra.utils.instantiate(self.cfg.dyn_sys)
+            ds_model_dir = os.path.join(self.cfg.skills_dir, self.cfg.state_type, skill, ds.name)
+
+            if ds.name == 'clfds':
                 clf_file = os.path.join(ds_model_dir, 'clf')
                 reg_file = os.path.join(ds_model_dir, 'ds')
-                ds = hydra.utils.instantiate(self.cfg.dyn_sys)
                 ds.load_models(clf_file=clf_file, reg_file=reg_file)
             else:
-                ds = None
+                ds.skills_dir = ds_model_dir
+                ds.load_params()
+                ds.state_type = self.cfg.state_type
+                ds.manifold = ds.make_manifold(self.cfg.dim)
             self.logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')
             self.logger.info(f'Test/Val Data: {val_dataset.X.size()}')
             # Evaluate by simulating in the CALVIN environment

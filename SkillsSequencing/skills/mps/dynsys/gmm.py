@@ -11,6 +11,7 @@ class ManifoldGMM(object):
     def __init__(self, n_components=3, plot_with_mlab=False):
         self.n_comp = n_components
         self.plot_with_mlab = plot_with_mlab
+        self.name = 'gmm'
         # Data and Manifold
         self.dataset = None
         self.state_type = None
@@ -39,7 +40,7 @@ class ManifoldGMM(object):
         manifold = Product([in_manifold, out_manifold])
         return manifold
 
-    def preprocess_data(self, dataset):
+    def preprocess_data(self, dataset, normalize=False):
         # Stack position and velocity data
         demos_xdx = [np.hstack([dataset.X[i], dataset.dX[i]]) for i in range(dataset.X.shape[0])]
         # Stack demos
@@ -50,17 +51,18 @@ class ManifoldGMM(object):
         X = demos_np[:, :self.dim]
         Y = demos_np[:, self.dim:]
 
-        if self.state_type == 'pos':
-            # Normalize to have range [-1, 1]
-            X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
-            Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
-        elif self.state_type == 'ori':
-            # Normalize to have range [-1, 1]
-            X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
-            Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
-            # Unit Norm
-            X = X / np.linalg.norm(X, axis=1)[:, None]
-            Y = Y / np.linalg.norm(Y, axis=1)[:, None]
+        if normalize:
+            if self.state_type == 'pos':
+                # Normalize to have range [-1, 1]
+                X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
+                Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
+            elif self.state_type == 'ori':
+                # Normalize to have range [-1, 1]
+                X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
+                Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
+                # Unit Norm
+                X = X / np.linalg.norm(X, axis=1)[:, None]
+                Y = Y / np.linalg.norm(Y, axis=1)[:, None]
 
         data = np.empty((X.shape[0], 2), dtype=object)
         for n in range(X.shape[0]):
@@ -84,7 +86,7 @@ class ManifoldGMM(object):
         self.state_type = self.dataset.state_type
         self.dim = self.dataset.X.numpy().shape[-1]
         self.manifold = self.make_manifold(self.dim)
-        self.data = self.preprocess_data(dataset)
+        self.data = self.preprocess_data(dataset, normalize=False)
 
     def train(self, dataset, wandb_flag=False):
         # Dataset
@@ -119,14 +121,13 @@ class ManifoldGMM(object):
         mu_gmr, sigma_gmr, H = manifold_gmr(Xt, self.manifold, self.means, self.covariances, self.priors)
         return mu_gmr, sigma_gmr, H
 
-    def forward(self, x):
-        dx = None
+    def predict_dx(self, x):
+        dx, _, __ = manifold_gmr(x.reshape(1, -1), self.manifold, self.means, self.covariances, self.priors)
         return dx
 
     def plot_gmm_mlab(self, input_space=True):
         from mayavi import mlab
         from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
-
 
         if input_space:
             dim = 0

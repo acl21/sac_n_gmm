@@ -20,6 +20,7 @@ class CLFDS(nn.Module):
         self.reg_model = reg_model
         self.clf_model = clf_model
         self.rho = functools.partial(rho, rho_0=rho_0, kappa_0=kappa_0)
+        self.name = 'clfds'
 
     def clf_cost(self, xi, d_xi):
         _, dV = self.clf_model.forward_with_grad(xi, create_graph=True)

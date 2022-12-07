@@ -13,7 +13,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         # For this example we will modify the observation to
         # only retrieve the end effector pose
         self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(7,))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(15,))
         # We can use the task utility to know if the task was executed correctly
         self.tasks = hydra.utils.instantiate(tasks)
         self.skill_name = None
@@ -32,7 +32,6 @@ class SkillSpecificEnv(PlayTableSimEnv):
     def set_state_type(self, type):
         """Set env input type - joint, pos, pos_ori"""
         self.state_type = type
-        self.obs_idx = self.get_valid_columns()
 
     def reset(self):
         obs = super().reset()
@@ -116,16 +115,9 @@ class SkillSpecificEnv(PlayTableSimEnv):
     def prepare_action(self, input, type):
         if self.state_type == 'joint':
             action = {'type': f'joint_{type}', 'action': None}
-            action['action'] = np.append(input, -1)
         elif self.state_type == 'pos':
             action = {'type': f'cartesian_{type}', 'action': None}
-            action['action'] = np.append(input, np.append(np.zeros(3), -1))
-        elif self.state_type == 'ori':
-            action = {'type': f'cartesian_{type}', 'action': None}
-            action['action'] = np.append(np.zeros(3), np.append(input, -1))
-        elif self.state_type == 'pos_ori':
-            action = {'type': f'cartesian_{type}', 'action': None}
-            action['action'] = np.append(input, -1)
+            action['action'] = input
 
         return action
 
