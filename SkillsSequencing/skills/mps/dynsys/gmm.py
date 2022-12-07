@@ -70,6 +70,7 @@ class ManifoldGMM(object):
         return data
 
     def load_params(self, filename='/gmm_params.npz'):
+        self.logger.info(f'Loading GMM params from {self.skills_dir + filename}')
         gmm = np.load(self.skills_dir + filename)
         gmm.allow_pickle = True
         self.means = np.array(gmm['gmm_means'])
@@ -80,6 +81,7 @@ class ManifoldGMM(object):
         np.savez(self.skills_dir + filename, gmm_means=self.means, \
                  gmm_covariances=self.covariances, \
                  gmm_priors=self.priors)
+        self.logger.info(f'Saved GMM params at {self.skills_dir + filename}')
 
     def set_data_params(self, dataset):
         self.dataset = dataset

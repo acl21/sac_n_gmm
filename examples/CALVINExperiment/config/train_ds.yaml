@@ -1,5 +1,5 @@
 defaults:
-  - dyn_sys: manifold_gmm # clfds or manifold_gmm
+  - dyn_sys: clfds # clfds or manifold_gmm
   - dataset: calvin_ds
   - _self_
 
@@ -34,12 +34,12 @@ is_quaternion: false
 # ds_type: 'gmm'
 
 # GMM params
-gmm_components: 3
+gmm_components: 7
 plot_with_mlab: false
 
 # Training params
 lr: 1e-3
-max_epochs: 1500
+max_epochs: 3000
 batch_size: 100
 
 # WANDB Logging Params
