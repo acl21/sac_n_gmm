@@ -1,5 +1,5 @@
 defaults:
-  - dyn_sys: clfds # clfds or manifold_gmm
+  - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - dataset: calvin_ds
   - _self_
 
@@ -17,7 +17,7 @@ demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_close.txt
+skills_list: ${skills_dir}/skillnames_one.txt
 state_type: 'pos'
 dim: none
 
@@ -27,6 +27,7 @@ train: true # false to load validation dataset
 goal_centered: true
 dt: 0.0666
 sampling_dt: 0.0333
+normalized: true
 is_quaternion: false
 
 # DS params
@@ -34,8 +35,8 @@ is_quaternion: false
 # ds_type: 'gmm'
 
 # GMM params
-gmm_components: 7
-plot_with_mlab: false
+gmm_components: 5
+plot: true
 
 # Training params
 lr: 1e-3

@@ -1,7 +1,7 @@
 defaults:
-  - calvin_env: default_close
+  - calvin_env: default_open
   - dataset: calvin_ds 
-  - dyn_sys: clfds # clfds or manifold_gmm
+  - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
 
   - override hydra/job_logging: colorlog
@@ -18,7 +18,7 @@ demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_close.txt
+skills_list: ${skills_dir}/skillnames_one.txt
 state_type: 'pos'
 dim: none
 
@@ -28,6 +28,7 @@ train: false # false to load validation dataset
 goal_centered: false
 dt: 0.0666
 sampling_dt: 0.0333
+normalized: false
 is_quaternion: false
 
 # Evaluation and DS params
@@ -36,8 +37,8 @@ max_steps: 240
 # ds_type: 'gmm'
 
 # GMM params
-gmm_components: 7
-plot_with_mlab: false
+gmm_components: 6
+plot: false
 
 # Environment params
 render: false

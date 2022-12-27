@@ -1,4 +1,8 @@
+import os
+import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.cm as cmx
+import matplotlib.animation as animation
 
 def plot_3d_trajectories(demos, repro=None, goal=None, figsize=(4,4)):
         fig = plt.figure(figsize=figsize)
@@ -17,3 +21,4 @@ def plot_3d_trajectories(demos, repro=None, goal=None, figsize=(4,4)):
         plt.legend()
         plt.tight_layout()
         plt.show()
+

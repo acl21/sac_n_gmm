@@ -19,7 +19,7 @@ class CALVINDynSysDataset(Dataset):
         self.dt = dt
         self.sampling_dt = sampling_dt
         self.normalized = normalized
-        self.norm_range = [0, 1]
+        self.norm_range = [-1, 1]
         self.X_mins = None
         self.X_maxs = None
         self.train = train

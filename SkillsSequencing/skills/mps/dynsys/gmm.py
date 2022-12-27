@@ -3,14 +3,15 @@ from pymanopt.manifolds import Euclidean, Sphere, Product
 
 from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
 from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
+from SkillsSequencing.utils.plot_utils import visualize_3d_gmm
 
 import wandb
 import logging
 
 class ManifoldGMM(object):
-    def __init__(self, n_components=3, plot_with_mlab=False):
+    def __init__(self, n_components=3, plot=False):
         self.n_comp = n_components
-        self.plot_with_mlab = plot_with_mlab
+        self.plot = plot
         self.name = 'gmm'
         # Data and Manifold
         self.dataset = None
@@ -44,25 +45,12 @@ class ManifoldGMM(object):
         # Stack position and velocity data
         demos_xdx = [np.hstack([dataset.X[i], dataset.dX[i]]) for i in range(dataset.X.shape[0])]
         # Stack demos
-        demos_np = demos_xdx[0]
+        demos = demos_xdx[0]
         for i in range(1, dataset.X.shape[0]):
-            demos_np = np.vstack([demos_np, demos_xdx[i]])
+            demos = np.vstack([demos, demos_xdx[i]])
 
-        X = demos_np[:, :self.dim]
-        Y = demos_np[:, self.dim:]
-
-        if normalize:
-            if self.state_type == 'pos':
-                # Normalize to have range [-1, 1]
-                X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
-                Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
-            elif self.state_type == 'ori':
-                # Normalize to have range [-1, 1]
-                X = 2*(X-np.min(X,axis=0))/(np.max(X,axis=0)-np.min(X,axis=0))-1
-                Y = 2*(Y-np.min(Y,axis=0))/(np.max(Y, axis=0)-np.min(Y,axis=0))-1
-                # Unit Norm
-                X = X / np.linalg.norm(X, axis=1)[:, None]
-                Y = Y / np.linalg.norm(Y, axis=1)[:, None]
+        X = demos[:, :self.dim]
+        Y = demos[:, self.dim:]
 
         data = np.empty((X.shape[0], 2), dtype=object)
         for n in range(X.shape[0]):
@@ -98,6 +86,7 @@ class ManifoldGMM(object):
         km_means, km_assignments = manifold_k_means(self.manifold, self.data, \
                                                     nb_clusters=self.n_comp)
         # GMM
+        self.logger.info(f'Manifold GMM with K-Means priors')
         init_covariances = np.concatenate(self.n_comp * [np.eye(self.dim+self.dim)[None]], 0)
         init_priors = np.zeros(self.n_comp)
         for k in range(self.n_comp):
@@ -112,12 +101,16 @@ class ManifoldGMM(object):
         self.save_params()
 
         # Plot GMM
-        if self.plot_with_mlab:
-            self.plot_gmm_mlab(input_space=True)
-            self.plot_gmm_mlab(input_space=False)
-        else:
-            self.plot_gmm_matplotlib(input_space=True)
-            self.plot_gmm_matplotlib(input_space=False)
+        if self.plot:
+            outfile = self.plot_gmm()
+
+        if wandb_flag:
+            config = {'n_comp': self.n_comp}
+            wandb.init(project='ds-training', entity='in-ac', name=f'{dataset.skill}_{dataset.state_type}_gmm', \
+                       config=config)
+            wandb.log({"GMM-Viz": wandb.Video(outfile)})
+            wandb.finish()
+
 
     def gmr(self, Xt):
         mu_gmr, sigma_gmr, H = manifold_gmr(Xt, self.manifold, self.means, self.covariances, self.priors)
@@ -159,5 +152,26 @@ class ManifoldGMM(object):
         mlab.view(30, 120)
         mlab.show()
 
-    def plot_gmm_matplotlib(self, input_space=True):
-        pass
+    def plot_gmm(self):
+        # Pick 15 random datapoints from X to plot
+        rand_idx = np.random.choice(np.arange(1, len(self.dataset.X)), size=15, replace=False, p=None)
+        plot_data = self.dataset.X[rand_idx[0]].numpy()
+        for i in rand_idx[1:]:
+            plot_data = np.vstack([plot_data, self.dataset.X[i].numpy()])
+
+        plot_means = np.empty((self.n_comp, 3))
+        for i in range(plot_means.shape[0]):
+            for j in range(plot_means.shape[1]):
+                plot_means[i, j] = self.means[i, 0][j]
+
+        temp = self.covariances[:, :self.dim, :self.dim]
+        plot_covariances = np.empty((self.n_comp, 3))
+        for i in range(plot_covariances.shape[0]):
+            for j in range(plot_covariances.shape[1]):
+                plot_covariances[i, j] = temp[i][j,j]
+
+        return visualize_3d_gmm(points=plot_data, w=self.priors, 
+                         mu=plot_means.T, stdev=plot_covariances.T, 
+                         skill=self.dataset.skill, 
+                         export_dir=self.skills_dir, 
+                         export_type='gif')

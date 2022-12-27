@@ -2,7 +2,6 @@ import os
 import sys
 from pathlib import Path
 
-
 cwd_path = Path(__file__).absolute().parents[0]
 parent_path = cwd_path.parents[0]
 
@@ -40,7 +39,7 @@ class SkillEvaluator(object):
         self.logger = logging.getLogger('SkillEvaluator')
 
     def evaluate(self, ds, dataset, max_steps, sampling_dt, render=False, record=False):
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
         for idx, (xi, d_xi) in enumerate(dataloader):
@@ -74,10 +73,17 @@ class SkillEvaluator(object):
                 if ds.name == 'clfds':
                     d_x = ds.reg_model.forward(torch.from_numpy(x-goal).float().unsqueeze(dim=0).unsqueeze(dim=0))
                     d_x = d_x.detach().cpu().numpy().squeeze()
+                    delta_x = sampling_dt * d_x
+                    new_x = x + delta_x
                 else:
-                    d_x = ds.predict_dx(x-goal)
-                delta_x = sampling_dt * d_x
-                new_x = x + delta_x
+                    # First Goal-Centering and then Normalize (GCN Space)
+                    d_x = ds.predict_dx(dataset.normalize(x-goal))
+                    delta_x = sampling_dt * d_x
+                    # Get next position in GCN space
+                    new_x = dataset.normalize(x-goal) + delta_x
+                    # Come back to original data space from GCN space
+                    new_x = dataset.undo_normalize(new_x) + goal
+                    # pdb.set_trace()
                 temp = np.append(new_x, np.append(observation[start_idx+3:end_idx+3], -1))
                 action = self.env.prepare_action(temp, type='abs')
                 observation, reward, done, info = self.env.step(action)
@@ -138,6 +144,14 @@ class SkillEvaluator(object):
                 reg_file = os.path.join(ds_model_dir, 'ds')
                 ds.load_models(clf_file=clf_file, reg_file=reg_file)
             else:
+                # Obtain X_mins and X_maxs from training data to normalize in real-time
+                self.cfg.dataset.train = True
+                self.cfg.dataset.normalized = True
+                self.cfg.dataset.goal_centered = True
+                train_dataset = hydra.utils.instantiate(self.cfg.dataset)
+                val_dataset.X_mins = train_dataset.X_mins
+                val_dataset.X_maxs = train_dataset.X_maxs
+
                 ds.skills_dir = ds_model_dir
                 ds.load_params()
                 ds.state_type = self.cfg.state_type
