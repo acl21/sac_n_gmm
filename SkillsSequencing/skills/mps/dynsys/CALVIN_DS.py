@@ -35,6 +35,9 @@ class CALVINDynSysDataset(Dataset):
 
         if self.state_type == 'ori' and is_quaternion:
             self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
+        elif self.state_type == 'pos_ori' and is_quaternion:
+            oris = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X[:, :, 3:])
+            self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
         if self.goal_centered:
             # Make X goal centered i.e., subtract each trajectory with its goal
