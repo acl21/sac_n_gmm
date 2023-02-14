@@ -26,7 +26,7 @@ echo "Running job $SLURM_JOB_NAME using $SLURM_JOB_CPUS_PER_NODE cpus per node w
 
 # Activate your environment
 # You can also comment out this line, and activate your environment in the login node before submitting the job
-source /work/dlclarge1/lagandua-refine-skills/miniconda3/bin/activate # Adjust to your path of Miniconda installation
+source /home/lagandua/miniconda3/bin/activate # Adjust to your path of Miniconda installation
 conda activate refine
 
 # Running the job

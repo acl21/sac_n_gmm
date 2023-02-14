@@ -6,8 +6,12 @@ qpth
 roboticstoolbox-python
 hydra-core
 hydra-colorlog
-torchvision
+# torch (download from pytorch.org)
+# torchvision (compile it with the same cuda version as pytorch)
 pytorch-lightning
+mayavi
+pymanopt
+wandb
 
 -e .
 

@@ -15,7 +15,9 @@ To install the library, clone the repository and install the related packages wi
 ```
 pip install -r requirements.txt
 ```
-However, install pytorch from their [official website](https://pytorch.org/). 
+However, install the following from their respective sources:
+* PyTorch and TorchVision from their [official website](https://pytorch.org/). 
+* `calvin_env` dependencies from [their repo](https://github.com/mees/calvin_env).
 
 ## Examples
 ### Pick-and-place example with a 4-DoFs 2D gripper, with a single demonstration
