@@ -33,7 +33,6 @@ class SkillTrainer(object):
         self.logger.info(f'Found {len(skill_set)} skills in the list')
         self.logger.info(f'Training DS with {self.state_type} as the input')
         for idx, skill in enumerate(skill_set):
-            
             # Load dataset
             self.cfg.dataset.skill = skill
             self.cfg.dataset.train = True

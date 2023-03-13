@@ -23,6 +23,7 @@ class CALVINDynSysDataset(Dataset):
         self.X_mins = None
         self.X_maxs = None
         self.train = train
+        self.fixed_ori = None
         if self.train:
             fname = 'training'
         else:
@@ -30,8 +31,13 @@ class CALVINDynSysDataset(Dataset):
         self.data_file = glob.glob(os.path.join(self.demos_dir, self.skill, f'{fname}.npy'))[0]
         self.state_type = state_type
 
-        start_idx, end_idx = self.get_valid_columns()
+        start_idx, end_idx = self.get_valid_columns(self.state_type)
         self.X = np.load(self.data_file)[:,:,start_idx:end_idx]
+
+        # Get the last orientation from the trajectory (this is bad for orientation dependant tasks)
+        s_idx, e_idx = self.get_valid_columns('ori')
+        temp_ori = np.load(self.data_file)[:,:,s_idx:e_idx]
+        self.fixed_ori = temp_ori[0, -1, :]
 
         if self.state_type == 'ori' and is_quaternion:
             self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
@@ -77,16 +83,16 @@ class CALVINDynSysDataset(Dataset):
         assert self.X_maxs is not None, "Cannot undo normalization with X_maxs as None"
         return (x - self.norm_range[0])*(self.X_maxs - self.X_mins)/(self.norm_range[-1] - self.norm_range[0]) + self.X_mins
 
-    def get_valid_columns(self):
-        if 'joint' in self.state_type:
+    def get_valid_columns(self, state_type):
+        if 'joint' in state_type:
             start, end = 8, 15
-        elif 'pos_ori' in self.state_type:
+        elif 'pos_ori' in state_type:
             start, end = 1, 7
-        elif 'pos' in self.state_type:
+        elif 'pos' in state_type:
             start, end = 1, 4
-        elif 'ori' in self.state_type:
+        elif 'ori' in state_type:
             start, end = 4, 7
-        elif 'grip' in self.state_type:
+        elif 'grip' in state_type:
             start, end = 7, 8
         return start, end
 

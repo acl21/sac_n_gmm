@@ -50,11 +50,14 @@ class SkillEvaluator(object):
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
-            temp = np.append(x0, np.append(observation[start_idx+3:end_idx+3], -1))
+            if dataset.state_type == 'pos':
+                temp = np.append(x0, np.append(dataset.fixed_ori, -1))
+            else:
+                temp = np.append(x0, -1)
             action = self.env.prepare_action(temp, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             count = 0
-            while np.linalg.norm(current_state - x0) > 0.008:
+            while np.linalg.norm(current_state - x0) > 0.01:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
                 count += 1
@@ -84,7 +87,10 @@ class SkillEvaluator(object):
                     # Come back to original data space from GCN space
                     new_x = dataset.undo_normalize(new_x) + goal
                     # pdb.set_trace()
-                temp = np.append(new_x, np.append(observation[start_idx+3:end_idx+3], -1))
+                if dataset.state_type == 'pos':
+                    temp = np.append(new_x, np.append(dataset.fixed_ori, -1))
+                else:
+                    temp = np.append(new_x, -1)
                 action = self.env.prepare_action(temp, type='abs')
                 observation, reward, done, info = self.env.step(action)
                 x = observation[start_idx:end_idx]
@@ -95,21 +101,20 @@ class SkillEvaluator(object):
                     self.env.render()
                 if done:
                     break
+            status = None
+            if info["success"]:
+                succesful_rollouts += 1
+                status = 'Success'
+            else:
+                status = 'Fail'
+            self.logger.info(f'{idx+1}: {status}!')
             if record:
                 self.logger.info(f'Saving Robot Camera Obs')
                 video_path = self.env.save_recorded_frames()
                 self.env.reset_recorded_frames()
+                status = None
                 if self.cfg.wandb:
-                    if info["success"]:
-                        status = 'Success'
-                    else:
-                        status = 'Fail'
                     wandb.log({f"{self.env.skill_name} {status} {self.env.record_count}":wandb.Video(video_path, fps=30, format="gif")})
-            if info["success"]:
-                succesful_rollouts += 1
-                self.logger.info('Success!')
-            else:
-                self.logger.info('Fail!')
             rollout_returns.append(rollout_return)
             rollout_lengths.append(step)
         acc = succesful_rollouts / len(dataset.X)
@@ -166,6 +171,9 @@ class SkillEvaluator(object):
             self.env.count = 0
             if self.cfg.wandb:
                 wandb.finish()
+
+            # Log evaluation output
+            self.logger.info(f'{skill} Skill Accuracy: {round(acc, 2)}')
 
         # Write accuracies to a file
         with open(os.path.join(self.env.outdir, f'skill_ds_acc_{self.cfg.state_type}.txt'), 'w') as f:

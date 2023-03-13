@@ -21,13 +21,13 @@ demos_dir: ${root}/examples/CALVINExperiment/data
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 skills_list: ${skills_dir}/skillnames_one.txt
-state_type: 'pos_ori'
+state_type: 'pos'
 dim: none
 
 # Dataset params:
 skill: none
 train: false # false to load validation dataset
-goal_centered: false
+goal_centered: false # this must be false during evaluation
 dt: 0.0666
 sampling_dt: 0.0333
 normalized: false
@@ -43,7 +43,7 @@ gmm_components: 6
 plot: false
 
 # Environment params
-render: true
+render: false
 record: false
 
 # WANDB Logging Params

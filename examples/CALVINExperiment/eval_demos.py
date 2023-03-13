@@ -22,7 +22,6 @@ from torch.utils.data import DataLoader
 from envs.skill_env import SkillSpecificEnv
 
 import logging
-logger = logging.getLogger(__name__)
 
 import wandb
 import pdb
@@ -52,7 +51,10 @@ class SkillEvaluatorDemos(object):
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
-            x = np.append(x0, -1)
+            if dataset.state_type == 'pos':
+                x = np.append(x0, np.append(dataset.fixed_ori, -1))
+            else:
+                x = np.append(x0, -1)
             action = self.env.prepare_action(x, type='abs')
 
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
@@ -63,39 +65,42 @@ class SkillEvaluatorDemos(object):
             # self.logger.info(f'Simulating with Data')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')
-                self.env.record()
+                self.env.record_frame()
             for step in range(1, len(xi.squeeze())):
                 # delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
                 # Absolute action
                 # new_x = xi.squeeze()[step-1, :].numpy() + delta_x
                 # print(idx, step)
                 new_x = xi.squeeze()[step, :]
-                new_x = np.append(new_x, -1)
+                if dataset.state_type == 'pos':
+                    new_x = np.append(new_x, np.append(dataset.fixed_ori, -1))
+                else:
+                    new_x = np.append(new_x, -1)
                 action = self.env.prepare_action(new_x, type='abs')
                 observation, reward, done, info = self.env.step(action)
                 rollout_return += reward
                 if record:
-                    self.env.record()
+                    self.env.record_frame()
                 if render:
                     self.env.render()
                 if done:
                     break
-            if record:
-                self.logger.info(f'Saving Robot Camera Obs')
-                video_path = self.env.save_and_reset_recording()
-                if self.cfg.wandb:
-                    if info["success"]:
-                        status = 'Success'
-                    else:
-                        status = 'Fail'
-                    wandb.log({f"{self.env.skill_name} {status} {self.env.count}":wandb.Video(video_path, fps=30, format="gif")})
+            status = None
             if info["success"]:
                 succesful_rollouts += 1
-                self.logger.info(f'{idx+1}: Success!')
+                status = 'Success'
             else:
-                self.logger.info(f'{idx+1}: Fail!')
+                status = 'Fail'
+            self.logger.info(f'{idx+1}: {status}!')
+            if record:
+                self.logger.info(f'Saving Robot Camera Obs')
+                video_path = self.env.save_recorded_frames()
+                self.env.reset_recorded_frames()
+                status = None
+                if self.cfg.wandb:
+                    wandb.log({f"{self.env.skill_name} {status} {self.env.record_count}":wandb.Video(video_path, fps=30, format="gif")})
             rollout_returns.append(rollout_return)
-            rollout_lengths.append(steps)
+            rollout_lengths.append(step)
         acc = succesful_rollouts / len(dataset.X)
         if self.cfg.wandb:
             wandb.config.update({'val dataset size': len(dataset.X)})
@@ -119,8 +124,8 @@ class SkillEvaluatorDemos(object):
             self.cfg.dataset.skill = skill
             val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
-            logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')
-            logger.info(f'Test/Val Data: {val_dataset.X.size()}')
+            self.logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')
+            self.logger.info(f'Test/Val Data: {val_dataset.X.size()}')
             # Evaluate demos by simulating in the CALVIN environment
             acc, avg_return, avg_len = self.evaluate(val_dataset, max_steps=self.cfg.max_steps, \
                                                      render=self.cfg.render, record=self.cfg.record, \
@@ -129,6 +134,9 @@ class SkillEvaluatorDemos(object):
             self.env.count = 0
             if self.cfg.wandb:
                 wandb.finish()
+            # Log evaluation output
+            self.logger.info(f'{skill} Demos Accuracy: {round(acc, 2)}')
+        
         # Write accuracies to a file
         with open(os.path.join(self.env.outdir, f'skill_ds_acc_{self.cfg.state_type}.txt'), 'w') as f:
             writer = csv.writer(f)
