@@ -1,5 +1,5 @@
 defaults:
-  - calvin_env: default_open
+  - calvin_env: default
   - dataset: calvin_ds 
   - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
@@ -11,15 +11,17 @@ seed: 42
 log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
-root: /home/lagandua/projects/refining-skill-sequences
+# root: /home/lagandua/projects/refining-skill-sequences
+root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
 # Skill Demos
-demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
+# demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
+demos_dir: ${root}/examples/CALVINExperiment/data
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 skills_list: ${skills_dir}/skillnames_one.txt
-state_type: 'pos'
+state_type: 'pos_ori'
 dim: none
 
 # Dataset params:
@@ -41,7 +43,7 @@ gmm_components: 6
 plot: false
 
 # Environment params
-render: false
+render: true
 record: false
 
 # WANDB Logging Params

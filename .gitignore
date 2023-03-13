@@ -8,3 +8,6 @@ jupyter_logs/
 **.ipynb_checkpoints/
 wandb/
 .vscode/
+**/data
+**/skills_ds
+**/temp

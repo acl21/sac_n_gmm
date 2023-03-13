@@ -52,8 +52,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
             rgb, depth = cam.render()
             rgb_obs[f"rgb_{cam.name}"] = rgb
             depth_obs[f"depth_{cam.name}"] = depth
-        obs = {"rgb_obs": rgb_obs, "depth_obs": depth_obs}
-        return obs
+        return rgb_obs, depth_obs
 
     def set_outdir(self, outdir):
         """Set output directory where recordings can/will be saved"""
@@ -113,9 +112,10 @@ class SkillSpecificEnv(PlayTableSimEnv):
         return start-1, end-1
 
     def prepare_action(self, input, type):
+        action = []
         if self.state_type == 'joint':
             action = {'type': f'joint_{type}', 'action': None}
-        elif self.state_type == 'pos':
+        elif 'pos' in self.state_type:
             action = {'type': f'cartesian_{type}', 'action': None}
             action['action'] = input
 

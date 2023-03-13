@@ -44,41 +44,34 @@ class SkillEvaluatorDemos(object):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
-        step = 0
+        steps = 0
         for idx, (xi, d_xi) in enumerate(dataloader):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f'Test Trajectory {idx+1}/{len(dataset)}')
             x0 = xi.squeeze()[0, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
-            if self.cfg.temp:
-                self.env.state_type = 'pos_ori'
-                start_idx, end_idx = 0, 6
             current_state = observation[start_idx:end_idx]
-            action = self.env.prepare_action(x0, type='abs')
+            x = np.append(x0, -1)
+            action = self.env.prepare_action(x, type='abs')
+
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            while np.linalg.norm(current_state - x0) > 0.005:
+            while np.linalg.norm(current_state - x0) > 0.08:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
-            if self.cfg.temp:
-                start_idx, end_idx = 0, 3
-                goal = current_state[start_idx:end_idx]
-                self.env.state_type = 'pos'
-                ori = current_state[3:6]
-            # x = current_state[start_idx:end_idx]
-            # self.logger.info(f'Simulating with DS')
+
+            # self.logger.info(f'Simulating with Data')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')
                 self.env.record()
             for step in range(1, len(xi.squeeze())):
-                delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
+                # delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
                 # Absolute action
-                new_x = xi.squeeze()[step-1, :].numpy() + delta_x
-                if self.cfg.temp:
-                    action = {'type': f'cartesian_abs', 'action': None}
-                    action['action'] = np.append(new_x[:3], np.append(ori, -1))
-                else:
-                    action = self.env.prepare_action(new_x, type='abs')
+                # new_x = xi.squeeze()[step-1, :].numpy() + delta_x
+                # print(idx, step)
+                new_x = xi.squeeze()[step, :]
+                new_x = np.append(new_x, -1)
+                action = self.env.prepare_action(new_x, type='abs')
                 observation, reward, done, info = self.env.step(action)
                 rollout_return += reward
                 if record:
@@ -98,9 +91,11 @@ class SkillEvaluatorDemos(object):
                     wandb.log({f"{self.env.skill_name} {status} {self.env.count}":wandb.Video(video_path, fps=30, format="gif")})
             if info["success"]:
                 succesful_rollouts += 1
-                self.logger.info('Success!')
+                self.logger.info(f'{idx+1}: Success!')
+            else:
+                self.logger.info(f'{idx+1}: Fail!')
             rollout_returns.append(rollout_return)
-            rollout_lengths.append(step)
+            rollout_lengths.append(steps)
         acc = succesful_rollouts / len(dataset.X)
         if self.cfg.wandb:
             wandb.config.update({'val dataset size': len(dataset.X)})
@@ -122,8 +117,6 @@ class SkillEvaluatorDemos(object):
 
             # Get validation dataset
             self.cfg.dataset.skill = skill
-            if self.cfg.temp:
-                self.cfg.dataset.state_type = 'pos_ori'
             val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
             logger.info(f'Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment')

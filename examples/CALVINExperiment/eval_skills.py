@@ -108,6 +108,8 @@ class SkillEvaluator(object):
             if info["success"]:
                 succesful_rollouts += 1
                 self.logger.info('Success!')
+            else:
+                self.logger.info('Fail!')
             rollout_returns.append(rollout_return)
             rollout_lengths.append(step)
         acc = succesful_rollouts / len(dataset.X)
@@ -130,8 +132,6 @@ class SkillEvaluator(object):
 
             # Get validation dataset
             self.cfg.dataset.skill = skill
-            if self.cfg.temp:
-                self.cfg.dataset.state_type = 'pos_ori'
             val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
             # Create and load models to evaluate
