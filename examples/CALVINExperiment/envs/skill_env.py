@@ -1,5 +1,5 @@
 from gym import spaces
-from calvin_env.envs.play_table_env import PlayTableSimEnv
+from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import PlayTableSimEnv
 import hydra
 import imageio
 import os

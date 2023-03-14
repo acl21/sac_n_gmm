@@ -43,7 +43,6 @@ class SkillEvaluatorDemos(object):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
-        steps = 0
         for idx, (xi, d_xi) in enumerate(dataloader):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f'Test Trajectory {idx+1}/{len(dataset)}')
@@ -58,10 +57,18 @@ class SkillEvaluatorDemos(object):
             action = self.env.prepare_action(x, type='abs')
 
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            while np.linalg.norm(current_state - x0) > 0.08:
+            count = 0.01
+            error_margin = 0.01
+            while np.linalg.norm(current_state - x0) > error_margin:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
-
+                count += 1
+                if count >= 200:
+                    # x0 = current_state
+                    print(x0, current_state, np.linalg.norm(current_state - x0))
+                    self.logger.info("CALVIN is struggling to place the EE at the right initial pose")
+                    # assert 1==0, "CALVIN is struggling to place the EE at the right initial pose"
+                    break
             # self.logger.info(f'Simulating with Data')
             if record:
                 self.logger.info(f'Recording Robot Camera Obs')

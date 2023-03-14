@@ -19,7 +19,7 @@ demos_dir: ${root}/examples/CALVINExperiment/data
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_one.txt
+skills_list: ${skills_dir}/skillnames_chosen.txt
 state_type: 'pos'
 dim: none
 
@@ -29,7 +29,7 @@ train: true # false to load validation dataset
 goal_centered: true
 dt: 0.0666
 sampling_dt: 0.0333
-normalized: true
+normalized: false
 is_quaternion: false
 
 # DS params

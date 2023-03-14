@@ -1,5 +1,5 @@
 defaults:
-  - calvin_env: default
+  - calvin_env: default_close
   - dataset: calvin_ds 
   - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
@@ -20,7 +20,7 @@ demos_dir: ${root}/examples/CALVINExperiment/data
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_one.txt
+skills_list: ${skills_dir}/skillnames_chosen.txt
 state_type: 'pos'
 dim: none
 

@@ -46,7 +46,7 @@ class SkillEvaluator(object):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f'Test Trajectory {idx+1}/{len(dataset)}')
             x0 = xi.squeeze()[0, :].numpy()
-            goal = xi.squeeze()[-1, :].numpy()
+            goal = dataset.goal
             rollout_return = 0
             observation = self.env.reset()
             current_state = observation[start_idx:end_idx]
@@ -57,7 +57,8 @@ class SkillEvaluator(object):
             action = self.env.prepare_action(temp, type='abs')
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
             count = 0
-            while np.linalg.norm(current_state - x0) > 0.01:
+            error_margin = 0.01
+            while np.linalg.norm(current_state - x0) >= error_margin:
                 observation, reward, done, info = self.env.step(action)
                 current_state = observation[start_idx:end_idx]
                 count += 1
@@ -66,6 +67,7 @@ class SkillEvaluator(object):
                     print(x0, current_state, np.linalg.norm(current_state - x0))
                     self.logger.info("CALVIN is struggling to place the EE at the right initial pose")
                     # assert 1==0, "CALVIN is struggling to place the EE at the right initial pose"
+                    break
             x = observation[start_idx:end_idx]
             # pdb.set_trace()
             # self.logger.info(f'Simulating with DS')
@@ -79,13 +81,17 @@ class SkillEvaluator(object):
                     delta_x = sampling_dt * d_x
                     new_x = x + delta_x
                 else:
+                    # goal = np.array([0.16425726, -0.23430869,  0.3718335])
+                    # goal = np.array([0.17921756, -0.21936302,  0.38075492])
                     # First Goal-Centering and then Normalize (GCN Space)
-                    d_x = ds.predict_dx(dataset.normalize(x-goal))
+                    # d_x = ds.predict_dx(dataset.normalize(x-goal))
+                    d_x = ds.predict_dx(x-goal)
                     delta_x = sampling_dt * d_x
                     # Get next position in GCN space
-                    new_x = dataset.normalize(x-goal) + delta_x
+                    # new_x = dataset.normalize(x-goal) + delta_x
+                    new_x = x + delta_x
                     # Come back to original data space from GCN space
-                    new_x = dataset.undo_normalize(new_x) + goal
+                    # new_x = dataset.undo_normalize(new_x) + goal
                     # pdb.set_trace()
                 if dataset.state_type == 'pos':
                     temp = np.append(new_x, np.append(dataset.fixed_ori, -1))
@@ -151,11 +157,12 @@ class SkillEvaluator(object):
             else:
                 # Obtain X_mins and X_maxs from training data to normalize in real-time
                 self.cfg.dataset.train = True
-                self.cfg.dataset.normalized = True
-                self.cfg.dataset.goal_centered = True
+                # self.cfg.dataset.normalized = True
+                # self.cfg.dataset.goal_centered = True
                 train_dataset = hydra.utils.instantiate(self.cfg.dataset)
-                val_dataset.X_mins = train_dataset.X_mins
-                val_dataset.X_maxs = train_dataset.X_maxs
+                val_dataset.goal = train_dataset.goal
+                # val_dataset.X_mins = train_dataset.X_mins
+                # val_dataset.X_maxs = train_dataset.X_maxs
 
                 ds.skills_dir = ds_model_dir
                 ds.load_params()

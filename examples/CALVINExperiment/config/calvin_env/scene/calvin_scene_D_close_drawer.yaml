@@ -20,7 +20,7 @@ objects:
         base__slide:
           initial_state: 0 # Prismatic
         base__drawer:
-          initial_state: 0.135 # Prismatic
+          initial_state: 0.20 # Prismatic
       buttons:
         base__button:
           initial_state: 0 # Prismatic
