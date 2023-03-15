@@ -39,8 +39,11 @@ class TaskSpecificEnv(PlayTableSimEnv):
                 if task in self.tasks_to_complete:
                     self.tasks_to_complete.remove(task)
                     self.completed_tasks_so_far.append(task)
-            if task == 'open_drawer':
-                self.start_info['scene_info']['doors']['base__drawer']['current_state'] = current_info['scene_info']['doors']['base__drawer']['current_state'] + 0.075
+            if len(self.completed_tasks_so_far) == 1:
+                if task == 'open_drawer':
+                    self.start_info['scene_info']['doors']['base__drawer']['current_state'] = 0.2
+                elif task == 'close_drawer':
+                    self.start_info['scene_info']['doors']['base__drawer']['current_state'] = 0.0
             if len(self.tasks_to_complete) == 0:
                 return True
             else:
@@ -58,7 +61,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
     def _termination(self):
         """Indicates if the robot has reached a terminal state"""
         done = len(self.tasks_to_complete) == 0
-        d_info = {"success": done, "tasks_to_complete": self.tasks_to_complete}
+        d_info = {"success": done, "tasks_to_complete": self.tasks_to_complete, "completed_tasks": self.completed_tasks_so_far}
         return done, d_info
 
     def step(self, action):

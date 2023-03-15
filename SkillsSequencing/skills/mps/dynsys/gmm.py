@@ -28,6 +28,9 @@ class ManifoldGMM(object):
         self.skills_dir = None
         self.logs_outdir = None
         self.logger = logging.getLogger('ManifoldGMM')
+        # Start and Goal states
+        self.start = None
+        self.goal = None
 
     def make_manifold(self, dim):
         if self.state_type in ['pos', 'joint']:

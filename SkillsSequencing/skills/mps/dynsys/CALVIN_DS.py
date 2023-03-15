@@ -24,6 +24,7 @@ class CALVINDynSysDataset(Dataset):
         self.X_maxs = None
         self.train = train
         self.fixed_ori = None
+        self.start = None
         self.goal = None
         if self.train:
             fname = 'training'
@@ -46,12 +47,11 @@ class CALVINDynSysDataset(Dataset):
             oris = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X[:, :, 3:])
             self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
+        self.start = np.mean(self.X[:, 0, :], axis=0)
         self.goal = np.mean(self.X[:, -1, :], axis=0)
-        print(self.goal)
         if self.goal_centered:
             # Make X goal centered i.e., subtract each trajectory with its goal
-            # self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
-            self.X = self.X-self.goal
+            self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
 
         if self.normalized:
             self.set_mins_and_maxs(self.X)
