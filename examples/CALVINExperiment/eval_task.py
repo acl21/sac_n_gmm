@@ -70,7 +70,7 @@ class TaskDemoEvaluator(object):
         x = current_state[start_idx:end_idx]
         for step in range(max_steps):
             # Manually switch the DS after some time. 
-            if step == 140:
+            if step == 62:
                 idx += 1
 
             d_x = ds[idx].predict_dx(x-ds[idx].goal)

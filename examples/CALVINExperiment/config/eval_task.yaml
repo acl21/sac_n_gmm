@@ -33,7 +33,7 @@ skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 # Dataset params:
 train: true # false to load validation dataset
 dt: 0.0666
-sampling_dt: 0.0333
+sampling_dt: ${dt} # 0.0333
 goal_centered: false
 normalized: false
 is_quaternion: false
