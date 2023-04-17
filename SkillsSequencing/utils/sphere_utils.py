@@ -129,3 +129,85 @@ def vector_to_skew_matrix(q: np.ndarray) -> np.ndarray:
     :return: corresponding skew-symmetric matrix
     """
     return np.array([[0, -q[2], q[1]], [q[2], 0, -q[0]], [-q[1], q[0], 0]])
+
+
+def sphere_logarithmic_map(x: np.ndarray, x0: np.ndarray) -> np.ndarray:
+    """
+    This functions maps a point lying on the manifold into the tangent space of a second point of the manifold.
+
+    Parameters
+    ----------
+    :param x: point on the manifold
+    :param x0: basis point of the tangent space where x will be mapped
+
+    Returns
+    -------
+    :return: u: vector in the tangent space of x0
+    """
+    if np.ndim(x0) < 2:
+        x0 = x0[:, None]
+
+    if np.ndim(x) < 2:
+        x = x[:, None]
+
+    distance = np.arccos(np.clip(np.dot(x0.T, x), -1., 1.))
+    # distance = np.arccos(np.maximum(np.minimum(np.dot(x0.T, x), 1.), -1.))
+    u = (x - x0 * np.cos(distance)) * distance/np.sin(distance)
+
+    u[:, distance[0] < 1e-16] = np.zeros((u.shape[0], 1))
+    return u
+
+
+def sphere_parallel_transport_operator(x1: np.ndarray, x2: np.ndarray) -> np.ndarray:
+    """
+    This function computes the parallel transport operator from x1 to x2.
+    Transported vectors can be computed as operator.dot(v).
+
+    Parameters
+    ----------
+    :param x1: point on the manifold
+    :param x2: point on the manifold
+
+    Returns
+    -------
+    :return: operator: parallel transport operator
+    """
+    #if np.sum(x1-x2) == 0.:
+    if np.linalg.norm(x1-x2) < 1e-10:
+        return np.eye(x1.shape[0])
+    else:
+        if np.ndim(x1) < 2:
+            x1 = x1[:, None]
+
+        if np.ndim(x2) < 2:
+            x2 = x2[:, None]
+
+        x_dir = sphere_logarithmic_map(x2, x1)
+        norm_x_dir = np.sqrt(np.sum(x_dir*x_dir, axis=0))
+        if norm_x_dir == 0.0:
+            return np.eye(len(x_dir))
+        else:
+            normalized_x_dir = x_dir / norm_x_dir
+            operator = np.dot(-x1 * np.sin(norm_x_dir), normalized_x_dir.T) + \
+                    np.dot(normalized_x_dir * np.cos(norm_x_dir), normalized_x_dir.T) + np.eye(x_dir.shape[0]) - \
+                    np.dot(normalized_x_dir, normalized_x_dir.T)
+
+            return operator
+
+
+def sphere_parallel_transport(sphere, x1: np.ndarray, x2: np.ndarray, v: np.array) -> np.ndarray:
+    """
+    This function parallel transports a vector v in Tx1 from x1 to x2.
+
+    Parameters
+    ----------
+    :param x1: point on the manifold
+    :param x2: point on the manifold
+    :param v: vector on the tangent space of x1
+
+    Returns
+    -------
+    :return: parallel transported vector v1 in the tangent space of x2
+    """
+    operator = sphere_parallel_transport_operator(x1, x2)
+    return operator.dot(v)

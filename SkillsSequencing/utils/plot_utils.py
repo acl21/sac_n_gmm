@@ -1,5 +1,6 @@
 import os
 import numpy as np
+import scipy as sp
 import torch
 import matplotlib.pyplot as plt
 import matplotlib.cm as cmx
@@ -7,6 +8,23 @@ import matplotlib.animation as animation
 
 from SkillsSequencing.utils.utils import prepare_torch
 device = prepare_torch()
+
+
+def plot_gaussian_covariance(ax, mean, covariance_matrix, color, edgecolor=None, transparency=0.5, linewidth=1, zorder=20):
+    nbDrawingSeg = 35
+    t = np.linspace(-np.pi, np.pi, nbDrawingSeg)
+
+    # Create Polygon
+    R = np.real(sp.linalg.sqrtm(covariance_matrix))
+    points = R.dot(np.array([[np.cos(t)], [np.sin(t)]]).reshape([2, nbDrawingSeg])) + mean[:, None]
+
+    if edgecolor is None:
+        edgecolor = color
+
+    polygon = plt.Polygon(points.transpose().tolist(), facecolor=color, alpha=transparency, linewidth=linewidth,
+                          zorder=zorder, edgecolor=edgecolor)
+
+    ax.add_patch(polygon)
 
 
 def plot_animated_ds(x0, ds, offset=0, ax=None, traj=None, is_3d=False, dt=0.01, T=100):
