@@ -133,7 +133,15 @@ def manifold_gmr(input_data, manifold, gmm_means, gmm_covariances, gmm_priors, i
                 if not isinstance(in_manifold, Product) and not isinstance(out_manifold, Product):
                     transport_to = [input_point, exp_data]
                 else:
-                    transport_to = np.hstack((input_point, exp_data))
+                    temp = []
+                    for x in reversed(exp_data): 
+                        temp.insert(0, x)
+                    if input_point.ndim == 1:
+                        temp.insert(0, input_point)
+                    else:
+                        for x in reversed(input_point): 
+                            temp.insert(0, x)
+                    transport_to = np.array(temp, dtype=object)
 
                 for j in range(gmm_covariances_eigenvectors[k].shape[1]):
                     # Transport
@@ -198,7 +206,15 @@ def manifold_gmr(input_data, manifold, gmm_means, gmm_covariances, gmm_priors, i
             if not isinstance(in_manifold, Product) and not isinstance(out_manifold, Product):
                 transport_to = [input_point, exp_data]
             else:
-                transport_to = np.hstack((input_point, exp_data))
+                temp = []
+                for x in reversed(exp_data): 
+                    temp.insert(0, x)
+                if input_point.ndim == 1:
+                    temp.insert(0, input_point)
+                else:
+                    for x in reversed(input_point): 
+                        temp.insert(0, x)
+                transport_to = np.array(temp, dtype=object)
 
             for j in range(gmm_covariances_eigenvectors[k].shape[1]):
                 # Transport
