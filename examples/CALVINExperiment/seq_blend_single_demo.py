@@ -12,6 +12,7 @@ from optparse import OptionParser
 from torch.utils.data import DataLoader
 
 from examples.CALVINExperiment.CALVINExp import CALVINExp
+from examples.CALVINExperiment.CALVINSkill import CALVINSkillComplex
 from SkillsSequencing.qpnet import qpnet_policies as policy_classes
 from SkillsSequencing.qpnet.spec_datasets import SkillDataset
 from SkillsSequencing.utils.utils import prepare_torch
@@ -28,16 +29,21 @@ def CALVIN_experiment(options):
         print('remove old model')
         os.remove(model_fpath)
 
+    # Define the loss weights to define the importance of the skills in the loss function
+    loss_weights = np.array([1.0, 1.0])
+
     timesteps = 122
 
-    skill_list = ['open_drawer', 'close_drawer']
-    exp = CALVINExp(skill_list=skill_list)
-    q0 = exp.skill_ds[0]
+    skill_names = ['open_drawer', 'close_drawer']
+    exp = CALVINExp(skill_names=skill_names)
+    q0 = exp.skill_list[0]
 
     # skill_dim = 6
-    skill_dim = sum([exp.datasets[i].X.numpy().shape[-1] for i in range(len(exp.skill_list))])
+    skill_dim = sum([exp.skill_list[i].dataset.X.numpy().shape[-1] for i in range(len(exp.skill_list))])
 
     Xt_d, dXt_d, desired_ = exp.get_taskspace_training_data()
+    batch_skill = CALVINSkillComplex(skill_dim, skill_dim, exp.skill_list, skill_cluster_idx=None)
+
     timestamps = np.linspace(0, 1, timesteps - 1)
     feat = timestamps[:, np.newaxis]
     dataset = SkillDataset(feat, Xt_d, dXt_d, desired_)
@@ -49,6 +55,38 @@ def CALVIN_experiment(options):
                      'fdim': 1,
                      'skill': batch_skill}
     policy_type = getattr(policy_classes, options.policy_name)
+    constraints = {'eqn': None, 'ineqn': None}
+
+    # Create the policy
+    policy = policy_type(**policy_config, **constraints)
+    policy.to(device)
+
+    if not os.path.exists(model_fpath):
+        # Train the policy
+        # If the policy has a full weight matrix, we first train a policy with diagonal weight matrix
+        if policy_type == policy_classes.SkillFullyWeightedPolicy:
+            diag_policy = policy_classes.SkillDiagonalWeightedPolicy(**policy_config, **constraints)
+            diag_policy.to(device)
+            diag_policy = policy_classes.train_policy(diag_policy, dataloader, loss_weights=loss_weights,
+                                                      model_path=model_fpath,
+                                                      learning_rate=learning_rate,
+                                                      max_epochs=MAX_EPOCH,
+                                                      consider_spec_train=False)
+            # The diagonal part of the full weight matrix is then initialized with the pretrained diagonal policy
+            # The full weight matrix is then trained starting at this initial point
+            policy.QDiagNet = diag_policy.Qnet
+
+        policy = policy_classes.train_policy(policy, dataloader, loss_weights=loss_weights,
+                                             model_path=model_fpath,
+                                             learning_rate=learning_rate,
+                                             max_epochs=MAX_EPOCH,
+                                             consider_spec_train=False)
+    else:
+        # If the policy already exists, load it
+        policy.load_policy(model_fpath)
+        policy.skill = batch_skill
+        policy.to(device)
+
 
 if __name__ == "__main__":
     parser = OptionParser()

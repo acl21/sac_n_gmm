@@ -20,7 +20,7 @@ class CALVINExp:
 
         """
         self.skill_names = skill_names
-        self.skill_list = [CALVINSkill(skill_name=skill) for skill in self.skill_names]
+        self.skill_list = [CALVINSkill(skill_name=skill, skill_id=i) for i, skill in enumerate(self.skill_names)]
         self.skill_fncs = [self.get_ds_skill(skill) for skill in self.skill_list]
 
     def get_ds_skill(self, skill):
@@ -86,3 +86,4 @@ class CALVINExp:
 if __name__ == "__main__":
     exp = CALVINExp(skill_names=['open_drawer', 'close_drawer'])
     Xt_d, dXt_d, desired_ = exp.get_taskspace_training_data()
+    print(Xt_d.shape, dXt_d.shape, desired_.shape)
