@@ -1,0 +1,52 @@
+defaults:
+  - calvin_env: default
+  - dyn_sys: manifold_gmm # clfds or manifold_gmm
+  - _self_
+
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+seed: 42
+slurm: false
+# root: /home/lagandua/projects/refining-skill-sequences
+root: E:/Uni-Freiburg/Research/refining-skill-sequences
+
+log_dir: ${root}/examples/CALVINExperiment/logs
+demos_dir: ${root}/examples/CALVINExperiment/data
+skills_dir: ${root}/examples/CALVINExperiment/skills_ds
+
+# Task params
+target_tasks: ['open_drawer', 'close_drawer']
+task_sequential: true
+timesteps: 122
+state_type: 'pos'
+
+# Policy
+policy_name: 'SkillDiagonalWeightedPolicy' # or 'SkillFullyWeightedPolicy'
+policy_dir: null
+policy_path: null
+update_policy: false
+
+# Training params
+lr: 0.1
+max_epochs: 100
+loss_weights: null
+
+# Environment params
+render: false
+record: false
+
+# WANDB Logging Params
+wandb: false
+
+hydra:
+  run:
+    dir: ${log_dir}/seqblend-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: ${log_dir}/seqblend-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${hydra.job.override_dirname}
+  job:
+    config:
+      override_dirname:
+        exclude_keys:
+          - log_dir

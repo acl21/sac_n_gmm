@@ -8,11 +8,10 @@ class CALVINSkill:
     """
     This class handles all functions related to CALVIN skills
     """
-    def __init__(self, skill_name, skill_id, skills_dir=None):
-        skills_dir = 'E:/Uni-Freiburg/Research/refining-skill-sequences/examples/CALVINExperiment/skills_ds/pos'
-        demos_dir = 'E:/Uni-Freiburg/Research/refining-skill-sequences/examples/CALVINExperiment/data/'
+    def __init__(self, skill_name, skill_id, demos_dir=None,  skills_dir=None, ):
         self.skill_name = skill_name
         self.skills_dir = skills_dir
+        self.demos_dir = demos_dir
         self.dim_ = 3
         self.state_idx = [i for i in range(skill_id*self.dim_, (skill_id+1)*self.dim_)]
         self.orignal_state_idx = self.state_idx
@@ -31,7 +30,7 @@ class CALVINSkill:
 
 
     def load_skill_ds_params(self):
-        skill_file = f'{self.skills_dir}/{self.skill_name}/gmm/gmm_params.npz'
+        skill_file = os.path.join(self.skills_dir, 'pos', self.skill_name, 'gmm', 'gmm_params.npz')
 
         if not os.path.exists(skill_file):
             raise FileNotFoundError(f'Skill GMM Params not found at {skill_file}')
@@ -48,20 +47,26 @@ class CALVINSkill:
         dx, _, __ = manifold_gmr((x-self.goal).reshape(1, -1),
                                  self.manifold, self.means, 
                                  self.covariances, self.priors)
-
         return dx[0]
 
     def update_desired_value(self, desired_value, use_state_idx=False):
+        if len(desired_value.shape) < 2:
+            desired_value = np.expand_dims(desired_value, axis=0)
+
         if use_state_idx and self.state_idx is not None:
             desired_value = desired_value[:, self.state_idx]
 
         self.desired_value = desired_value
 
     def error(self, x, use_state_idx=False):
-        if self.state_idx is not None and use_state_idx:
+        if len(x.shape) == 1:
+            x = np.expand_dims(x, axis=0)
+
+        if x.shape[-1] > self.desired_value.shape[-1]:
+            if self.state_idx is not None and use_state_idx:
                 x = x[:, self.state_idx]
-        else:
-            x = x[:, self.orignal_state_idx]
+            else:
+                x = x[:, self.orignal_state_idx]
 
         return self.desired_value[:, :self.dim_] - x[:, :self.dim_]
 
@@ -91,7 +96,6 @@ class CALVINSkillComplex:
         for i in range(len(skills)):
             self.skills_dim.append(skills[i].dim())
             total_dim += skills[i].dim()
-
         self.total_dim = total_dim
 
     def update_desired_value(self, desired_value, use_state_idx=True):
