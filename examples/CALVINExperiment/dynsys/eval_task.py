@@ -1,31 +1,24 @@
 import os
 import sys
+import hydra
+import wandb
+import logging
+import numpy as np
 from pathlib import Path
+from omegaconf import DictConfig
+from examples.CALVINExperiment.envs.task_env import TaskSpecificEnv
 
 cwd_path = Path(__file__).absolute().parents[0]
-parent_path = cwd_path.parents[0]
+calvin_exp_path = cwd_path.parents[0]
+root = calvin_exp_path.parents[0]
 
-# This is for using the locally installed repo clone when using slurm
-sys.path.insert(0, parent_path.as_posix()) 
-sys.path.insert(0, os.path.join(cwd_path, 'calvin_env')) #CALVIN env 
-sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix()) # Root
+# This is to access the locally installed repo clone when using slurm
+sys.path.insert(0, calvin_exp_path.as_posix()) # CALVINExperiment
+sys.path.insert(0, os.path.join(calvin_exp_path, 'calvin_env')) # CALVINExperiment/calvin_env
+sys.path.insert(0, root.as_posix()) # Root
 
-import numpy as np
-import hydra
-from omegaconf import DictConfig
 
-import csv
-import torch
-from torch.utils.data import DataLoader
-
-from envs.task_env import TaskSpecificEnv
-
-import logging
-
-import wandb
-import pdb
-
-class TaskDemoEvaluator(object):
+class TaskEvaluator(object):
     """Python wrapper that allows you to evaluate learned DS skills 
     in the CALVIN environment.
     """
@@ -35,7 +28,7 @@ class TaskDemoEvaluator(object):
         self.env = env
         self.task = cfg.target_tasks
         self.task_name = '_'.join(self.task)
-        self.logger = logging.getLogger('TaskDemoEvaluator')
+        self.logger = logging.getLogger('TaskEvaluator')
 
     def evaluate(self, ds, dataset, max_steps, sampling_dt, render=False, record=False):
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
@@ -59,8 +52,8 @@ class TaskDemoEvaluator(object):
             current_state = observation[start_idx:end_idx+end_idx]
             count += 1
             if count >= 200:
-                print(x0, current_state, np.linalg.norm(current_state - x0[:-1]))
                 self.logger.info("CALVIN is struggling to place the EE at the right initial pose")
+                self.logger.info(x0, current_state, np.linalg.norm(current_state - x0))
                 break
         # self.logger.info(f'Simulating with DS')
         if record:
@@ -90,7 +83,7 @@ class TaskDemoEvaluator(object):
                 self.env.render()
             if done:
                 break
-            print(step, delta_x, info['completed_tasks'])
+            # print(step, delta_x, info['completed_tasks'])
         status = None
         if info["success"]:
             succesful_rollouts += 1
@@ -155,7 +148,7 @@ class TaskDemoEvaluator(object):
         self.logger.info(f'{self.task_name} Task Accuracy: {round(acc, 2)}')
 
 
-@hydra.main(config_path="./config", config_name="eval_task")
+@hydra.main(version_base='1.1', config_path="../config", config_name="eval_task")
 def main(cfg: DictConfig) -> None:
     new_env_cfg = {**cfg.calvin_env.env}
     new_env_cfg["use_egl"] = False
@@ -172,7 +165,7 @@ def main(cfg: DictConfig) -> None:
     env.state_type = cfg.state_type
     env.set_outdir(hydra.core.hydra_config.HydraConfig.get()['runtime']['output_dir'])
 
-    eval = TaskDemoEvaluator(cfg, env)
+    eval = TaskEvaluator(cfg, env)
     eval.run()
 
 if __name__ == "__main__":

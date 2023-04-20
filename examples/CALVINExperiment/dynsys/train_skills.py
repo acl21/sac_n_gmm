@@ -1,19 +1,19 @@
 import os
 import sys
-from pathlib import Path
-
-cwd_path = Path(__file__).absolute().parents[0]
-parent_path = cwd_path.parents[0]
-
-# This is for using the locally installed repo clone when using slurm
-sys.path.insert(0, parent_path.as_posix())
-sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix()) # Root
-
 import hydra
+import logging
+from pathlib import Path
 from omegaconf import DictConfig
 
-import logging
-import pdb
+cwd_path = Path(__file__).absolute().parents[0]
+calvin_exp_path = cwd_path.parents[0]
+root = calvin_exp_path.parents[0]
+
+# This is to access the locally installed repo clone when using slurm
+sys.path.insert(0, calvin_exp_path.as_posix()) # CALVINExperiment
+sys.path.insert(0, os.path.join(calvin_exp_path, 'calvin_env')) # CALVINExperiment/calvin_env
+sys.path.insert(0, root.as_posix()) # Root
+
 
 class SkillTrainer(object):
     """Python wrapper that allows you to train DS skills on a given dataset
@@ -60,7 +60,7 @@ class SkillTrainer(object):
                 ds.train(dataset=train_dataset, wandb_flag=self.cfg.wandb)
         self.logger.info(f'Training complete. Trained DS models are saved in the {os.path.join(self.ds_out_dir)} directory')
 
-@hydra.main(config_path="./config", config_name="train_ds")
+@hydra.main(version_base='1.1', config_path="../config", config_name="train_ds")
 def main(cfg: DictConfig) -> None:
     eval = SkillTrainer(cfg)
     eval.run()
