@@ -1,4 +1,5 @@
 import os
+import logging
 import numpy as np
 from pymanopt.manifolds import Euclidean, Product
 from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
@@ -15,12 +16,11 @@ class CALVINSkill:
         self.dim_ = 3
         self.state_idx = [i for i in range(skill_id*self.dim_, (skill_id+1)*self.dim_)]
         self.orignal_state_idx = self.state_idx
-
+        self.logger = logging.getLogger(f'CALVINSkill-{self.skill_name}')
         self.means = None
         self.covariances = None
         self.priors = None
         self.load_skill_ds_params()
-
         self.manifold = Product([Euclidean(self.dim_), Euclidean(self.dim_)])
         self.dataset = CALVINDynSysDataset(skill=skill_name, train=True, state_type='pos',
                                            goal_centered=False, normalized=False,
@@ -28,14 +28,13 @@ class CALVINSkill:
         self.goal = self.dataset.goal
         self.desired_value = None
 
-
     def load_skill_ds_params(self):
         skill_file = os.path.join(self.skills_dir, 'pos', self.skill_name, 'gmm', 'gmm_params.npz')
 
         if not os.path.exists(skill_file):
             raise FileNotFoundError(f'Skill GMM Params not found at {skill_file}')
         else: 
-            print(f'Loading GMM params from {skill_file}')
+            self.logger.info(f'Loading GMM params from {skill_file}')
         gmm = np.load(skill_file)
         gmm.allow_pickle = True
         self.means = np.array(gmm['gmm_means'])

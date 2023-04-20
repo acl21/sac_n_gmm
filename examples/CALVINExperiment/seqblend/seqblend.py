@@ -41,7 +41,7 @@ class CALVINSeqBlend(object):
 
         # Updating policy when given else use it for testing
         if self.cfg.policy_path is not None:
-            if os.path.exists(self.cfg.policy_path) and not self.cfg.update_policy:
+            if os.path.exists(self.cfg.policy_path) and not self.cfg.update_policy and not self.cfg.eval_policy:
                 self.logger.info('Remove old policy!')
                 os.remove(self.cfg.policy_path)
         else:
@@ -97,8 +97,9 @@ class CALVINSeqBlend(object):
             policy.skill = batch_skill
             policy.to(device)
 
-        # Test the policy
-        # self.exp.test_policy(policy, is_plot=True)
+        if self.cfg.eval_policy:
+            # Test the policy
+            self.exp.test_policy(policy, self.cfg, self.env)
 
 @hydra.main(version_base='1.1', config_path='../config', config_name='seqblend')
 def main(cfg: DictConfig) -> None:

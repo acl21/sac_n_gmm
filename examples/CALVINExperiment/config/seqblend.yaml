@@ -26,14 +26,15 @@ policy_name: 'SkillDiagonalWeightedPolicy' # or 'SkillFullyWeightedPolicy'
 policy_dir: null
 policy_path: null
 update_policy: false
+eval_policy: true
 
 # Training params
 lr: 0.1
-max_epochs: 100
+max_epochs: 500
 loss_weights: null
 
 # Environment params
-render: false
+render: true
 record: false
 
 # WANDB Logging Params

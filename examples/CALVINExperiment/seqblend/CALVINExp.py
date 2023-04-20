@@ -87,31 +87,24 @@ class CALVINExp:
         self.logger.info(f'Returning task space training data!')
         return Xt_d, dXt_d, desired_
 
-    def test_policy(self, policy, fname=None, is_plot=False):
+    def test_policy(self, policy, cfg, env):
         """
         Test a given policy. The robot is controlled in cartesian space.
 
         Parameters
         ---------
         :param policy: trained policy
-
-        Optional parameters
-        -------------------
-        :param is_plot: if True plot the resulting trajectory
-        :param fname: demonstrations file
-        :param is_plot_env: if True, display the resulting robot motion in CALVIN environment
+        :param cfg: Hydra config
+        :param env: CALVIN environment
 
         Return
         ------
         :return: resulting trajectory
         """
-        if self.demo_log is None and fname is None:
-            raise ValueError('Please generate demo first or give the demo log filename (.npz)')
+        if self.demo_log is None:
+            task_dir = '_'.join(self.skill_names)
+            self.demo_log = np.load(os.path.join(self.demos_dir, task_dir, fname='training.npy'))
 
-        if fname is not None:
-            demo_log = np.load(fname)
-            self.demo_log = dict(demo_log)
-        
         dt = 2/30
         X = self.demo_log[0]
         dX = (X[2:, :] - X[:-2, :]) / dt
@@ -127,10 +120,33 @@ class CALVINExp:
                                     sum([skill.dim() for skill in self.skill_list])))
         
         self.logger.info('Testing Phase: Start Generating Trajectory ...')
-        Xt = X[0, :]
+        Xt = np.hstack((X, dX))
+
+        start_idx, end_idx = 0, 3
+        x0 = Xt[0, :]
+        temp = np.append(x0[:3], np.append(self.skill_list[0].dataset.fixed_ori, -1))
+        action = env.prepare_action(temp, type='abs')
+        count = 0
+        error_margin = 0.01
+        observation = env.reset()
+        current_state = observation[start_idx:end_idx]
+        while np.linalg.norm(current_state - x0[:3]) >= error_margin:
+            observation, reward, done, info = env.step(action)
+            current_state = observation[start_idx:end_idx]
+            count += 1
+            if count >= 200:
+                self.logger.info("CALVIN is struggling to place the EE at the right initial pose")
+                self.logger.info(x0[:3], current_state, np.linalg.norm(current_state - x0[:3]))
+                break
+        xt = np.hstack((current_state[start_idx:end_idx], x0[3:]))
+
+        if cfg.record:
+                self.logger.info(f'Recording Robot Camera Obs')
+                env.record_frame()
+
         for i in range(timesteps):
-            self.logger.info('Timestamp %1d / %1d' % (i, timesteps), end='\r')
-            [self.skill_list[si].update_desired_value(self.skill_fncs[si](Xt)) for si in range(len(self.skill_list))]
+            self.logger.info('Timestamp %1d / %1d' % (i, timesteps))
+            [self.skill_list[s].update_desired_value(self.skill_fncs[s](xt[:3])) for s in range(len(self.skill_list))]
 
             desired_ = []
             for skill in self.skill_list:
@@ -139,17 +155,35 @@ class CALVINExp:
 
             desired_ = torch.cat(desired_, dim=-1)
             feat = torch.from_numpy(np.array([timestamps[i]])).double().to(device)
-            Xt_input = torch.from_numpy(Xt).double().to(device)
+            Xt_input = torch.from_numpy(xt).double().to(device)
             Xt_input = torch.unsqueeze(Xt_input, 0)
 
-            dXt, wmat, ddata = policy.forward(feat, Xt_input, desired_)
-            dXt = dXt.detach().cpu().numpy()[0, :] * dt
-            dXt_track[i, :] = dXt
-            Xt = Xt + dXt
-            Xt_track[i, :] = Xt
+            dxt, wmat, ddata = policy.forward(feat, Xt_input, desired_)
+            dxt = dxt.detach().cpu().numpy()[0, :] * dt
+            xt = xt + dxt
+            Xt_track[i, :] = xt
+            dXt_track[i, :] = dxt
             wmat_track[i, :] = ddata.detach().cpu().numpy()
             wmat_full_track[i, :, :] = wmat.detach().cpu().numpy()
 
+            # Act in the environment
+            temp = np.append(xt[:3], np.append(self.skill_list[0].dataset.fixed_ori, -1))
+            action = env.prepare_action(temp, type='abs')
+            observation, reward, done, info = env.step(action)
+            xt = np.hstack((observation[start_idx:end_idx], xt[3:]))
+
+            if cfg.record:
+                env.record_frame()
+            if cfg.render:
+                env.render()
+            if done:
+                break
+
+        if cfg.record:
+            self.logger.info(f'Saving Robot Camera Obs')
+            video_path = env.save_recorded_frames()
+            env.reset_recorded_frames()
+            status = None
         res = {'Xt_track': Xt_track,
                'dXt_track': dXt_track,
                'wmat_track': wmat_track}

@@ -3,6 +3,7 @@ import sys
 import csv
 import hydra
 import wandb
+import torch
 import logging
 import numpy as np
 from pathlib import Path
