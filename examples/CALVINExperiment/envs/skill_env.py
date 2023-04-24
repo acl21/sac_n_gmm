@@ -58,9 +58,13 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """Set output directory where recordings can/will be saved"""
         self.outdir = outdir
 
-    def record_frame(self, obs_type='rgb', cam_type='static', size=200):
+    def record_frame(self, obs_type='rgb', cam_type='static', size=208):
         """Record RGB obsservation"""
-        frame = self.get_camera_obs()[f'{obs_type}_obs'][f'{obs_type}_{cam_type}']
+        rgb_obs, depth_obs = self.get_camera_obs()
+        if obs_type == 'rgb':
+            frame = rgb_obs[f'{obs_type}_{cam_type}']
+        else:
+            frame = depth_obs[f'{obs_type}_{cam_type}']
         frame = cv2.resize(frame, (size, size), interpolation = cv2.INTER_AREA)
         self.frames.append(frame)
 

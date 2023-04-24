@@ -19,6 +19,8 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.completed_tasks_so_far = []
         self.sequential = sequential
         self.state_type = 'pos'
+        self.frames = []
+        self.record_count = 0
 
     def _success(self):
         """
@@ -124,9 +126,13 @@ class TaskSpecificEnv(PlayTableSimEnv):
         """Set output directory where recordings can/will be saved"""
         self.outdir = outdir
 
-    def record_frame(self, obs_type='rgb', cam_type='static', size=200):
+    def record_frame(self, obs_type='rgb', cam_type='static', size=208):
         """Record RGB obsservation"""
-        frame = self.get_camera_obs()[f'{obs_type}_obs'][f'{obs_type}_{cam_type}']
+        rgb_obs, depth_obs = self.get_camera_obs()
+        if obs_type == 'rgb':
+            frame = rgb_obs[f'{obs_type}_{cam_type}']
+        else:
+            frame = depth_obs[f'{obs_type}_{cam_type}']
         frame = cv2.resize(frame, (size, size), interpolation = cv2.INTER_AREA)
         self.frames.append(frame)
 
@@ -137,9 +143,9 @@ class TaskSpecificEnv(PlayTableSimEnv):
     def save_recorded_frames(self, path=None):
         """Save recorded frames as a video"""
         if path is None:
-            imageio.mimsave(os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count}.mp4'), self.frames, fps=30)
+            imageio.mimsave(os.path.join(self.outdir, f'{"_".join(self.target_tasks)}_{self.state_type}_{self.record_count}.mp4'), self.frames, fps=30)
             self.record_count += 1
         else:
             imageio.mimsave(path, self.frames, fps=30)
-        return os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count-1}.mp4')
+        return os.path.join(self.outdir, f'{"_".join(self.target_tasks)}_{self.state_type}_{self.record_count-1}.mp4')
     

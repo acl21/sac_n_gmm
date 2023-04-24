@@ -108,6 +108,7 @@ class CALVINExp:
         dt = 2/30
         X = self.demo_log[0]
         dX = (X[2:, :] - X[:-2, :]) / dt
+        x0 = X[0, :]
         X = X[1:-1, :]
 
         timesteps = X.shape[0]
@@ -123,7 +124,7 @@ class CALVINExp:
         Xt = np.hstack((X, dX))
 
         start_idx, end_idx = 0, 3
-        x0 = Xt[0, :]
+        x0 = np.hstack((x0, x0))
         temp = np.append(x0[:3], np.append(self.skill_list[0].dataset.fixed_ori, -1))
         action = env.prepare_action(temp, type='abs')
         count = 0
@@ -141,8 +142,9 @@ class CALVINExp:
         xt = np.hstack((current_state[start_idx:end_idx], x0[3:]))
 
         if cfg.record:
-                self.logger.info(f'Recording Robot Camera Obs')
-                env.record_frame()
+            self.logger.info(f'Recording Robot Camera Obs')
+            env.reset_recorded_frames()
+            env.record_frame()
 
         for i in range(timesteps):
             self.logger.info('Timestamp %1d / %1d' % (i, timesteps))
@@ -157,25 +159,38 @@ class CALVINExp:
             feat = torch.from_numpy(np.array([timestamps[i]])).double().to(device)
             Xt_input = torch.from_numpy(xt).double().to(device)
             Xt_input = torch.unsqueeze(Xt_input, 0)
-
             dxt, wmat, ddata = policy.forward(feat, Xt_input, desired_)
-            dxt = dxt.detach().cpu().numpy()[0, :] * dt
-            xt = xt + dxt
+
+            # Simple check to switch between the two skills
+            # if ddata.detach().cpu().numpy()[0, 0] > 0.5:
+            #     xt_weighted = xt[:3]
+            # else:
+            #     xt_weighted = xt[3:]
+
+            # Weighted sum of the two skills
+            dxt = np.hstack((self.skill_list[0].predict_dx(xt[:3]), self.skill_list[1].predict_dx(xt[:3])))
+            dxt_weighted = ddata.detach().cpu().numpy() * dxt
+            dxt_weighted = dxt_weighted[:, :3] + dxt_weighted[:, 3:]
+            xt_weighted = xt[:3] + dxt_weighted[0] * dt
+
+            # Act in the environment
+            temp = np.append(xt_weighted, np.append(self.skill_list[0].dataset.fixed_ori, -1))
+            action = env.prepare_action(temp, type='abs')
+            observation, reward, done, info = env.step(action)
+            xt = np.hstack((observation[start_idx:end_idx], observation[start_idx:end_idx]))
+
+            # Track some values of interest
             Xt_track[i, :] = xt
             dXt_track[i, :] = dxt
             wmat_track[i, :] = ddata.detach().cpu().numpy()
             wmat_full_track[i, :, :] = wmat.detach().cpu().numpy()
 
-            # Act in the environment
-            temp = np.append(xt[:3], np.append(self.skill_list[0].dataset.fixed_ori, -1))
-            action = env.prepare_action(temp, type='abs')
-            observation, reward, done, info = env.step(action)
-            xt = np.hstack((observation[start_idx:end_idx], xt[3:]))
-
             if cfg.record:
                 env.record_frame()
             if cfg.render:
                 env.render()
+            if info["success"]:
+                self.logger.info('Success')
             if done:
                 break
 
@@ -184,6 +199,7 @@ class CALVINExp:
             video_path = env.save_recorded_frames()
             env.reset_recorded_frames()
             status = None
+
         res = {'Xt_track': Xt_track,
                'dXt_track': dXt_track,
                'wmat_track': wmat_track}
