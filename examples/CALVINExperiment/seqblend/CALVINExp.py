@@ -2,6 +2,7 @@ import os
 import torch
 import logging
 import numpy as np
+import matplotlib.pyplot as plt
 from SkillsSequencing.utils.utils import prepare_torch
 from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 
@@ -160,18 +161,25 @@ class CALVINExp:
             Xt_input = torch.from_numpy(xt).double().to(device)
             Xt_input = torch.unsqueeze(Xt_input, 0)
             dxt, wmat, ddata = policy.forward(feat, Xt_input, desired_)
-
+            
             # Simple check to switch between the two skills
             # if ddata.detach().cpu().numpy()[0, 0] > 0.5:
             #     xt_weighted = xt[:3]
             # else:
             #     xt_weighted = xt[3:]
 
-            # Weighted sum of the two skills
+            # Weighted sum of velocities
             dxt = np.hstack((self.skill_list[0].predict_dx(xt[:3]), self.skill_list[1].predict_dx(xt[:3])))
             dxt_weighted = ddata.detach().cpu().numpy() * dxt
             dxt_weighted = dxt_weighted[:, :3] + dxt_weighted[:, 3:]
             xt_weighted = xt[:3] + dxt_weighted[0] * dt
+
+            # Weighted sum of the two next positions (doesn't work well)
+            # dxt = np.hstack((self.skill_list[0].predict_dx(xt[:3]), self.skill_list[1].predict_dx(xt[:3])))
+            # dxt = dxt.detach().cpu().numpy()
+            # xt1 = dxt[:, :3] * dt  
+            # xt2 = dxt[:, 3:] * dt
+            # xt_weighted = ddata.detach().cpu().numpy()[0, 0] * xt1 + (1 - ddata.detach().cpu().numpy()[0, 0]) * xt2
 
             # Act in the environment
             temp = np.append(xt_weighted, np.append(self.skill_list[0].dataset.fixed_ori, -1))
@@ -203,6 +211,31 @@ class CALVINExp:
         res = {'Xt_track': Xt_track,
                'dXt_track': dXt_track,
                'wmat_track': wmat_track}
+        
+        if cfg.plot:
+            # Line plot of all the weights
+            plt.figure()
+            plt.plot(wmat_full_track[:, 0, 0], label='w_open')
+            plt.legend()
+            plt.xlabel('Timesteps')
+            plt.ylabel('Weights')
+            plt.title('Weighting of the two skills')
+            plt.savefig(os.path.join(env.outdir, 'weights.png'))
+            plt.show()
+
+            # 3D plot of the trajectory
+            fig = plt.figure()
+            ax = fig.add_subplot(111, projection='3d')
+            ax.scatter(Xt_track[:, 0], Xt_track[:, 1], Xt_track[:, 2], label='Policy')
+            ax.scatter(X[:, 0], X[:, 1], X[:, 2], label='GT')
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
+            ax.view_init(10, -130)
+            plt.title('Trajectory in 3D')
+            plt.legend()
+            plt.savefig(os.path.join(env.outdir, 'traj.png'))
+            plt.show()
 
 if __name__ == "__main__":
     exp = CALVINExp(skill_names=['open_drawer', 'close_drawer'])
