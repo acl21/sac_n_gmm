@@ -12,6 +12,7 @@ pytorch-lightning
 mayavi
 pymanopt
 wandb
+imageio[ffmpeg]
 
 -e .
 

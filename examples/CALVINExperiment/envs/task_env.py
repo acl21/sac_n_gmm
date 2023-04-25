@@ -4,14 +4,13 @@ import copy
 import imageio
 import cv2
 import os
-from collections import defaultdict
 
 from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import PlayTableSimEnv
 
 class TaskSpecificEnv(PlayTableSimEnv):
     def __init__(self, tasks={}, target_tasks=[], sequential=True, **kwargs):
         super(TaskSpecificEnv, self).__init__(**kwargs)
-        self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
+        self.action_space = spaces.Box(low=0, high=1, shape=(len(target_tasks),))
         self.observation_space = spaces.Box(low=-1, high=1, shape=(15,))
         self.tasks = hydra.utils.instantiate(tasks)
         self.target_tasks = target_tasks
@@ -21,6 +20,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.state_type = 'pos'
         self.frames = []
         self.record_count = 0
+        self._max_episode_steps = 16
 
     def _success(self):
         """
