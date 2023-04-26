@@ -2,11 +2,8 @@ import os
 import csv
 import torch
 import wandb
-import shutil
-import numpy as np
 from termcolor import colored
 from collections import defaultdict
-from torch.utils.tensorboard import SummaryWriter
 
 COMMON_TRAIN_FORMAT = [
     ('episode', 'E', 'int'),
@@ -19,6 +16,7 @@ COMMON_TRAIN_FORMAT = [
 COMMON_EVAL_FORMAT = [
     ('episode', 'E', 'int'),
     ('step', 'S', 'int'),
+    ('env_step', 'EnvS', 'int'),
     ('episode_reward', 'R', 'float') 
 ]
 

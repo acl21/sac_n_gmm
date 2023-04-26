@@ -96,12 +96,14 @@ class CALVINSeqBlendRL(object):
 
             if self.cfg.record:
                 video_path = self.env.save_recorded_frames(outdir=self.video_dir, fname=f'{self.step}_{episode}')
-                self.logger.log(f'eval/video/{self.step}_{episode}', video_path)
                 self.env.reset_recorded_frames()
 
             average_episode_reward += episode_reward
         average_episode_reward /= self.cfg.num_eval_episodes
+        self.logger.log(f'eval/video/{self.step}', video_path)
         self.logger.log('eval/episode_reward', average_episode_reward)
+        self.logger.log('eval/step', self.step)
+        self.logger.log('eval/env_step', self.env_step)
         self.logger.dump(self.step)
         self.logger.log_params(self.agent, actor=True, critic=True)
         self.logger.log_params(self.agent, actor=True, critic=False, fname=f'{self.step}')
@@ -171,7 +173,7 @@ class CALVINSeqBlendRL(object):
             self.step += 1
 
         self.logger.log_params(self.agent, actor=True, critic=True)
-        self.logger.log("eval/episode", episode)
+        self.logger.log("train/episode", episode)
         self.logger.log('train/env_step', self.env_step)
         self.logger.log('train/step', self.step)
         self.evaluate()

@@ -16,8 +16,8 @@ slurm: false
 
 work_dir: null
 
-# root: /home/lagandua/projects/refining-skill-sequences
-root: E:/Uni-Freiburg/Research/refining-skill-sequences
+root: /home/lagandua/projects/refining-skill-sequences
+# root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
 # Task params
 target_tasks: ['open_drawer', 'close_drawer']
@@ -54,19 +54,19 @@ gmm_components: 6
 plot: false
 
 # RL Agent params
-num_train_steps: 1e2
+num_train_steps: 1e6
 replay_buffer_capacity: ${num_train_steps}
-num_seed_steps: 5
-eval_frequency: 10
+num_seed_steps: 5000
+eval_frequency: 1000
 num_eval_episodes: 10
 device: cuda
-log_frequency: 10
+log_frequency: 1000
 log_save_tb: false
 accumulate_steps: 8
 
 # Environment params
 render: false
-record: false
+record: true
 env_max_episode_steps: 18 
 # Max env steps = max_episode_steps * accumulate_steps
 
