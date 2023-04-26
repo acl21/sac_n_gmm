@@ -7,7 +7,6 @@ import logging
 import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
-from scipy.special import softmax
 from examples.CALVINExperiment.envs.task_env import TaskSpecificEnv
 from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 from examples.CALVINExperiment.rl.logger import Logger
@@ -33,7 +32,8 @@ class CALVINSeqBlendRL(object):
         self.env = env
         self.skill_names = self.cfg.target_tasks
         self.skill_ds = [CALVINSkill(skill, i, cfg.demos_dir, cfg.skills_dir) for i, skill in enumerate(self.skill_names)]
-        self.logger = Logger(self.env.outdir,
+        self.work_dir = self.cfg.work_dir
+        self.logger = Logger(self.work_dir,
                              save_tb=self.cfg.log_save_tb,
                              log_frequency=self.cfg.log_frequency,
                              agent='sac')
@@ -54,6 +54,12 @@ class CALVINSeqBlendRL(object):
         self.fixed_ori = np.array(self.cfg.fixed_ori)
         self.step = 0
 
+        self.weights_dir = os.path.join(self.work_dir, "weights")
+        os.makedirs(self.weights_dir, exist_ok=True)
+        if self.cfg.record:
+            self.video_dir = os.path.join(self.work_dir, "videos")
+            os.makedirs(self.video_dir, exist_ok=True)
+
     def evaluate(self):
         average_episode_reward = 0
         for episode in range(self.cfg.num_eval_episodes):
@@ -61,15 +67,15 @@ class CALVINSeqBlendRL(object):
             self.agent.reset()
             done = False
             episode_reward = 0
+            episode_step = 0
 
             if self.cfg.record:
                 self.env.reset_recorded_frames()
                 self.env.record_frame()
 
-            while not done:
+            while not done and episode_step < self.env._max_episode_steps:
                 with rl_utils.eval_mode(self.agent):
                     weights = self.agent.act(obs[:3], sample=False)
-                    weights = softmax(weights)
                 for _ in range(self.acc_steps):
                     dx = np.hstack([skill.predict_dx(obs[:3]) for skill in self.skill_ds])
                     # dx = weights * dx
@@ -86,9 +92,10 @@ class CALVINSeqBlendRL(object):
                         self.env.render()
                     if done:
                         break
+                episode_step += 1
 
             if self.cfg.record:
-                video_path = self.env.save_recorded_frames()
+                video_path = self.env.save_recorded_frames(outdir=self.video_dir, fname=f'{self.step}_{episode}')
                 self.env.reset_recorded_frames()
 
             average_episode_reward += episode_reward
@@ -96,12 +103,14 @@ class CALVINSeqBlendRL(object):
         self.logger.log('eval/episode_reward', average_episode_reward,
                         self.step)
         self.logger.dump(self.step)
+        self.agent.save(self.weights_dir)
+        self.agent.save_actor(self.weights_dir, self.step)
 
     def run(self):
-        episode, episode_reward, done = 0, 0, True
+        episode, episode_reward, done, done_no_max = 0, 0, True, True
         start_time = time.time()
         while self.step < self.cfg.num_train_steps:
-            if done:
+            if done or episode_step >= self.env._max_episode_steps:
                 if self.step > 0:
                     self.logger.log('train/duration',
                                     time.time() - start_time, self.step)
@@ -131,8 +140,7 @@ class CALVINSeqBlendRL(object):
                 weights = self.env.action_space.sample()
             else:
                 with rl_utils.eval_mode(self.agent):
-                    weights = self.agent.act(obs, sample=True)
-            weights = softmax(weights)
+                    weights = self.agent.act(obs[:3], sample=True)
             # run training update
             if self.step >= self.cfg.num_seed_steps:
                 self.agent.update(self.replay_buffer, self.logger, self.step)
@@ -160,10 +168,15 @@ class CALVINSeqBlendRL(object):
             episode_step += 1
             self.step += 1
 
+        self.agent.save(self.weights_dir)
+        self.logger.log("eval/episode", episode, self.step)
+        self.evaluate()
+
 
 @hydra.main(version_base='1.1', config_path='../config', config_name='train_sac')
 def main(cfg: DictConfig) -> None:
     hydra_out_dir = hydra.core.hydra_config.HydraConfig.get()['runtime']['output_dir']
+    cfg.work_dir = hydra_out_dir
 
     new_env_cfg = {**cfg.calvin_env.env}
     new_env_cfg["use_egl"] = False
@@ -178,7 +191,8 @@ def main(cfg: DictConfig) -> None:
 
     env = TaskSpecificEnv(**new_env_cfg)
     env.state_type = cfg.state_type
-    env.set_outdir(hydra_out_dir)
+    env._max_episode_steps = cfg.env_max_episode_steps
+    
 
     seqblend = CALVINSeqBlendRL(cfg, env)
     seqblend.run()

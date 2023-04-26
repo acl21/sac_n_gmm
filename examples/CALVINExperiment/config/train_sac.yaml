@@ -14,6 +14,8 @@ seed: 42
 log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
+work_dir: null
+
 # root: /home/lagandua/projects/refining-skill-sequences
 root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
@@ -52,7 +54,7 @@ gmm_components: 6
 plot: false
 
 # RL Agent params
-num_train_steps: 1e3
+num_train_steps: 1e2
 replay_buffer_capacity: ${num_train_steps}
 num_seed_steps: 5
 eval_frequency: 10
@@ -60,11 +62,13 @@ num_eval_episodes: 10
 device: cuda
 log_frequency: 10
 log_save_tb: false
-accumulate_steps: 16
+accumulate_steps: 8
 
 # Environment params
 render: false
 record: true
+env_max_episode_steps: 18 
+# Max env steps = max_episode_steps * accumulate_steps
 
 # WANDB Logging Params
 wandb: false
@@ -73,9 +77,9 @@ temp: false
 
 hydra:
   run:
-    dir: ${log_dir}/sac-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/seqblend-sac-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/sac-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/seqblend-sac-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

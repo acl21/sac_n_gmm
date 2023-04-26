@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -68,6 +69,7 @@ class SACAgent(Agent):
         obs = obs.unsqueeze(0)
         dist = self.actor(obs.float())
         action = dist.sample() if sample else dist.mean
+        action = torch.nn.Softmax(dim=-1)(action)
         action = action.clamp(*self.action_range)
         assert action.ndim == 2 and action.shape[0] == 1
         return utils.to_np(action[0])
@@ -99,6 +101,7 @@ class SACAgent(Agent):
     def update_actor_and_alpha(self, obs, logger, step):
         dist = self.actor(obs)
         action = dist.rsample()
+        action = torch.nn.Softmax(dim=-1)(action)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         actor_Q1, actor_Q2 = self.critic(obs, action)
 
@@ -140,3 +143,16 @@ class SACAgent(Agent):
         if step % self.critic_target_update_frequency == 0:
             utils.soft_update_params(self.critic, self.critic_target,
                                      self.critic_tau)
+
+    def save(self, path):
+        torch.save(self.actor.trunk.state_dict(), os.path.join(path, "actor.pth"))
+        torch.save(self.critic.Q1.state_dict(), os.path.join(path, "critic_q1.pth"))
+        torch.save(self.critic.Q2.state_dict(), os.path.join(path, "critic_q2.pth"))
+
+    def load(self, path):
+        self.actor.trunk.load_state_dict(torch.load(os.path.join(path, "actor.pth")))
+        self.critic.Q1.load_state_dict(torch.load(os.path.join(path, "critic_q1.pth")))
+        self.critic.Q2.load_state_dict(torch.load(os.path.join(path, "critic_q2.pth")))
+
+    def save_actor(self, path, id):
+        torch.save(self.actor.trunk.state_dict(), os.path.join(path, f"{id}.pth"))
