@@ -1,16 +1,17 @@
-from torch.utils.tensorboard import SummaryWriter
-from collections import defaultdict
-import json
 import os
 import csv
-import shutil
 import torch
+import wandb
+import shutil
 import numpy as np
 from termcolor import colored
+from collections import defaultdict
+from torch.utils.tensorboard import SummaryWriter
 
 COMMON_TRAIN_FORMAT = [
     ('episode', 'E', 'int'),
     ('step', 'S', 'int'),
+    ('env_step', 'EnvS', 'int'),
     ('episode_reward', 'R', 'float'),
     ('duration', 'D', 'time') 
 ]
@@ -23,7 +24,7 @@ COMMON_EVAL_FORMAT = [
 
 
 AGENT_TRAIN_FORMAT = {
-    'sac': [
+    'seqblend-sac': [
         ('batch_reward', 'BR', 'float'),
         ('actor_loss', 'ALOSS', 'float'),
         ('critic_loss', 'CLOSS', 'float'),
@@ -32,7 +33,6 @@ AGENT_TRAIN_FORMAT = {
         ('actor_entropy', 'AENT', 'float')
     ]
 }
-
 
 class AverageMeter(object):
     def __init__(self):
@@ -45,7 +45,6 @@ class AverageMeter(object):
 
     def value(self):
         return self._sum / max(1, self._count)
-
 
 class MetersGroup(object):
     def __init__(self, file_name, formating):
@@ -113,26 +112,29 @@ class MetersGroup(object):
             self._dump_to_console(data, prefix)
         self._meters.clear()
 
-
 class Logger(object):
     def __init__(self,
                  log_dir,
-                 save_tb=False,
+                 save_wb=False,
+                 cfg=None,
                  log_frequency=10000,
-                 agent='sac'):
+                 agent='seqblend-sac'):
         self._log_dir = log_dir
         self._log_frequency = log_frequency
-        if save_tb:
-            tb_dir = os.path.join(log_dir, 'tb')
-            if os.path.exists(tb_dir):
-                try:
-                    shutil.rmtree(tb_dir)
-                except:
-                    print("logger.py warning: Unable to remove tb directory")
-                    pass
-            self._sw = SummaryWriter(tb_dir)
-        else:
-            self._sw = None
+
+        self.save_wb = save_wb
+        if self.save_wb:
+            config = {
+            "num_train_steps": cfg.num_train_steps,
+            "num_seed_steps": cfg.num_seed_steps,
+            "eval_frequency": cfg.eval_frequency,
+            "num_eval_episodes": cfg.num_eval_episodes,
+            "accumulate_steps": cfg.accumulate_steps,
+            "env_max_episode_steps": cfg.env_max_episode_steps,
+            }
+            wandb.init(project=agent, entity='in-ac', config=config)
+
+
         # each agent has specific output format for training
         assert agent in AGENT_TRAIN_FORMAT
         train_format = COMMON_TRAIN_FORMAT + AGENT_TRAIN_FORMAT[agent]
@@ -141,56 +143,34 @@ class Logger(object):
         self._eval_mg = MetersGroup(os.path.join(log_dir, 'eval'),
                                     formating=COMMON_EVAL_FORMAT)
 
-    def _should_log(self, step, log_frequency):
-        log_frequency = log_frequency or self._log_frequency
-        return step % log_frequency == 0
-
-    def _try_sw_log(self, key, value, step):
-        if self._sw is not None:
-            self._sw.add_scalar(key, value, step)
-
-    def _try_sw_log_video(self, key, frames, step):
-        if self._sw is not None:
-            frames = torch.from_numpy(np.array(frames))
-            frames = frames.unsqueeze(0)
-            self._sw.add_video(key, frames, step, fps=30)
-
-    def _try_sw_log_histogram(self, key, histogram, step):
-        if self._sw is not None:
-            self._sw.add_histogram(key, histogram, step)
-
-    def log(self, key, value, step, n=1, log_frequency=1):
-        if not self._should_log(step, log_frequency):
+    def log(self, key, value):
+        if 'video' in key:
+            self.log_video(key, value)
             return
-        assert key.startswith('train') or key.startswith('eval')
         if type(value) == torch.Tensor:
             value = value.item()
-        self._try_sw_log(key, value / n, step)
+        if self.save_wb:
+            wb_key = key.replace('/', '_')
+            wandb.log({wb_key: value})
         mg = self._train_mg if key.startswith('train') else self._eval_mg
-        mg.log(key, value, n)
+        mg.log(key, value, 1)
 
-    def log_param(self, key, param, step, log_frequency=None):
-        if not self._should_log(step, log_frequency):
-            return
-        self.log_histogram(key + '_w', param.weight.data, step)
-        if hasattr(param.weight, 'grad') and param.weight.grad is not None:
-            self.log_histogram(key + '_w_g', param.weight.grad.data, step)
-        if hasattr(param, 'bias') and hasattr(param.bias, 'data'):
-            self.log_histogram(key + '_b', param.bias.data, step)
-            if hasattr(param.bias, 'grad') and param.bias.grad is not None:
-                self.log_histogram(key + '_b_g', param.bias.grad.data, step)
+    def log_video(self, key, filepath):
+        if self.save_wb:
+            wb_key = key.split('/')[-1]
+            wandb.log(
+            {wb_key: wandb.Video(filepath, fps=15, format="gif")})
 
-    def log_video(self, key, frames, step, log_frequency=None):
-        if not self._should_log(step, log_frequency):
-            return
-        assert key.startswith('train') or key.startswith('eval')
-        self._try_sw_log_video(key, frames, step)
-
-    def log_histogram(self, key, histogram, step, log_frequency=None):
-        if not self._should_log(step, log_frequency):
-            return
-        assert key.startswith('train') or key.startswith('eval')
-        self._try_sw_log_histogram(key, histogram, step)
+    def log_params(self, agent, fname=None, actor=False, critic=False):
+        self.weights_dir = os.path.join(self._log_dir, "weights")
+        os.makedirs(self.weights_dir, exist_ok=True)
+        if fname is None:
+            fname = ''
+        if actor:
+            torch.save(agent.actor.trunk.state_dict(), os.path.join(self.weights_dir, f"actor_{fname}.pth"))
+            torch.save(agent.critic.Q1.state_dict(), os.path.join(self.weights_dir, f"critic_q1_{fname}.pth"))
+        if critic:
+            torch.save(agent.critic.Q2.state_dict(), os.path.join(self.weights_dir, f"critic_q2_{fname}.pth"))
 
     def dump(self, step, save=True, ty=None):
         if ty is None:

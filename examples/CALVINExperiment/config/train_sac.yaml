@@ -66,12 +66,12 @@ accumulate_steps: 8
 
 # Environment params
 render: false
-record: true
+record: false
 env_max_episode_steps: 18 
 # Max env steps = max_episode_steps * accumulate_steps
 
 # WANDB Logging Params
-wandb: false
+wandb: true
 
 temp: false
 

@@ -34,9 +34,10 @@ class CALVINSeqBlendRL(object):
         self.skill_ds = [CALVINSkill(skill, i, cfg.demos_dir, cfg.skills_dir) for i, skill in enumerate(self.skill_names)]
         self.work_dir = self.cfg.work_dir
         self.logger = Logger(self.work_dir,
-                             save_tb=self.cfg.log_save_tb,
+                             save_wb=self.cfg.wandb,
+                             cfg=self.cfg,
                              log_frequency=self.cfg.log_frequency,
-                             agent='sac')
+                             agent='seqblend-sac')
 
         self.device = torch.device(self.cfg.device)
         self.cfg.agent.obs_dim = 3 # position
@@ -53,9 +54,8 @@ class CALVINSeqBlendRL(object):
         self.acc_steps = self.cfg.accumulate_steps
         self.fixed_ori = np.array(self.cfg.fixed_ori)
         self.step = 0
+        self.env_step = 0
 
-        self.weights_dir = os.path.join(self.work_dir, "weights")
-        os.makedirs(self.weights_dir, exist_ok=True)
         if self.cfg.record:
             self.video_dir = os.path.join(self.work_dir, "videos")
             os.makedirs(self.video_dir, exist_ok=True)
@@ -71,7 +71,7 @@ class CALVINSeqBlendRL(object):
 
             if self.cfg.record:
                 self.env.reset_recorded_frames()
-                self.env.record_frame()
+                self.env.record_frame(size=64)
 
             while not done and episode_step < self.env._max_episode_steps:
                 with rl_utils.eval_mode(self.agent):
@@ -87,7 +87,7 @@ class CALVINSeqBlendRL(object):
                     episode_reward += reward
 
                     if self.cfg.record:
-                        self.env.record_frame()
+                        self.env.record_frame(size=64)
                     if self.cfg.render:
                         self.env.render()
                     if done:
@@ -96,15 +96,15 @@ class CALVINSeqBlendRL(object):
 
             if self.cfg.record:
                 video_path = self.env.save_recorded_frames(outdir=self.video_dir, fname=f'{self.step}_{episode}')
+                self.logger.log(f'eval/video/{self.step}_{episode}', video_path)
                 self.env.reset_recorded_frames()
 
             average_episode_reward += episode_reward
         average_episode_reward /= self.cfg.num_eval_episodes
-        self.logger.log('eval/episode_reward', average_episode_reward,
-                        self.step)
+        self.logger.log('eval/episode_reward', average_episode_reward)
         self.logger.dump(self.step)
-        self.agent.save(self.weights_dir)
-        self.agent.save_actor(self.weights_dir, self.step)
+        self.logger.log_params(self.agent, actor=True, critic=True)
+        self.logger.log_params(self.agent, actor=True, critic=False, fname=f'{self.step}')
 
     def run(self):
         episode, episode_reward, done, done_no_max = 0, 0, True, True
@@ -113,18 +113,19 @@ class CALVINSeqBlendRL(object):
             if done or episode_step >= self.env._max_episode_steps:
                 if self.step > 0:
                     self.logger.log('train/duration',
-                                    time.time() - start_time, self.step)
+                                    time.time() - start_time)
                     start_time = time.time()
                     self.logger.dump(
                         self.step, save=(self.step > self.cfg.num_seed_steps))
 
                 # evaluate agent periodically
                 if self.step > 0 and self.step % self.cfg.eval_frequency == 0:
-                    self.logger.log('eval/episode', episode, self.step)
+                    self.logger.log('eval/episode', episode)
                     self.evaluate()
 
-                self.logger.log('train/episode_reward', episode_reward,
-                                self.step)
+                self.logger.log('train/episode_reward', episode_reward)
+                self.logger.log('train/env_step', self.env_step)
+                self.logger.log('train/step', self.step)
 
                 obs = self.env.reset()
                 self.agent.reset()
@@ -133,7 +134,7 @@ class CALVINSeqBlendRL(object):
                 episode_step = 0
                 episode += 1
 
-                self.logger.log('train/episode', episode, self.step)
+                self.logger.log('train/episode', episode)
 
             # sample action for data collection
             if self.step < self.cfg.num_seed_steps:
@@ -154,6 +155,7 @@ class CALVINSeqBlendRL(object):
                 temp = np.append(new_x, np.append(self.fixed_ori, -1))
                 action = self.env.prepare_action(temp, type='abs')
                 obs, reward, done, info = self.env.step(action)
+                self.env_step += 1
                 next_obs = obs[:3]
 
             # allow infinite bootstrap
@@ -168,8 +170,10 @@ class CALVINSeqBlendRL(object):
             episode_step += 1
             self.step += 1
 
-        self.agent.save(self.weights_dir)
-        self.logger.log("eval/episode", episode, self.step)
+        self.logger.log_params(self.agent, actor=True, critic=True)
+        self.logger.log("eval/episode", episode)
+        self.logger.log('train/env_step', self.env_step)
+        self.logger.log('train/step', self.step)
         self.evaluate()
 
 

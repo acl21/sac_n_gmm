@@ -27,14 +27,3 @@ class DoubleQCritic(nn.Module):
         self.outputs['q2'] = q2
 
         return q1, q2
-
-    def log(self, logger, step):
-        for k, v in self.outputs.items():
-            logger.log_histogram(f'train_critic/{k}_hist', v, step)
-
-        assert len(self.Q1) == len(self.Q2)
-        for i, (m1, m2) in enumerate(zip(self.Q1, self.Q2)):
-            assert type(m1) == type(m2)
-            if type(m1) is nn.Linear:
-                logger.log_param(f'train_critic/q1_fc{i}', m1, step)
-                logger.log_param(f'train_critic/q2_fc{i}', m2, step)
