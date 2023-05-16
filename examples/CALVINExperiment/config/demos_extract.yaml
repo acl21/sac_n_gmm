@@ -6,13 +6,15 @@ defaults:
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-log_dir: ${root}/logs
+log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
-demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
-skill: 'none'
-skillnames_file: /work/dlclarge1/lagandua-refine-skills/calvin_demos/skillnames.txt
 
-root: /home/lagandua/projects/refining-skill-sequences/calvin_data_extraction/
+demos_dir: /home/lagandua/datasets/calvin_demos2/
+
+root: /home/lagandua/projects/refining-skill-sequences
+skills_dir: ${root}/examples/CALVINExperiment/skills_ds
+skills_list: ${skills_dir}/skillnames_all.txt
+skill: null
 
 hydra:
   run:

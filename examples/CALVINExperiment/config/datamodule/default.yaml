@@ -2,7 +2,7 @@ defaults:
   - dataset: calvin
   - transforms: calvin
 
-_target_: datasets.skill_datamodule.SkillDataModule
+_target_: examples.CALVINExperiment.demos_extract.datasets.skill_datamodule.SkillDataModule
 _recursive_: false
 batch_size:   32
 num_workers:  1

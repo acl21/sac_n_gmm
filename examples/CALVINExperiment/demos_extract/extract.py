@@ -1,20 +1,20 @@
+import os
+import sys
+import hydra
+import numpy as np
 import logging
 from pathlib import Path
-import sys
-from typing import List, Union
-import os
-import numpy as np
-from numpy import loadtxt
-
-cwd_path = Path(__file__).absolute().parents[0]
-parent_path = cwd_path.parents[0]
-# This is for using the locally installed repo clone when using slurm
-sys.path.insert(0, parent_path.as_posix())
-
-import hydra
 from omegaconf import DictConfig
 from pytorch_lightning import seed_everything
-import pdb
+
+cwd_path = Path(__file__).absolute().parents[0]
+calvin_exp_path = cwd_path.parents[0]
+root = calvin_exp_path.parents[0]
+
+# This is to access the locally installed repo clone when using slurm
+sys.path.insert(0, calvin_exp_path.as_posix()) # CALVINExperiment
+sys.path.insert(0, os.path.join(calvin_exp_path, 'calvin_env')) # CALVINExperiment/calvin_env
+sys.path.insert(0, root.as_posix()) # Root
 
 logger = logging.getLogger(__name__)
 os.chdir(cwd_path)
@@ -48,7 +48,7 @@ def save_demonstrations(datamodule, save_dir, skill):
         np.save(save_dir, demos)
 
 
-@hydra.main(config_path="./config", config_name="demos")
+@hydra.main(version_base='1.1', config_path="../config", config_name="demos_extract")
 def extract_demos(cfg: DictConfig) -> None:
     """
     This is called to extract demonstrations for a specific skill.
@@ -56,7 +56,7 @@ def extract_demos(cfg: DictConfig) -> None:
         cfg: hydra config
     """
     seed_everything(cfg.seed, workers=True)
-    f = open(cfg.skillnames_file, "r")
+    f = open(cfg.skills_list, "r")
     skill_set = f.read()
     skill_set = skill_set.split("\n")
     for skill in skill_set:

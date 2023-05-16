@@ -4,15 +4,15 @@ matplotlib
 cvxpy
 qpth
 roboticstoolbox-python
-hydra-core
-hydra-colorlog
+hydra-core==1.3.1
+hydra-colorlog==1.2.0
 # torch (download from pytorch.org)
 # torchvision (compile it with the same cuda version as pytorch)
-pytorch-lightning
-mayavi
-pymanopt
-wandb
-imageio[ffmpeg]
+pytorch-lightning==1.9.1
+mayavi==4.8.1
+pymanopt==2.1.1
+wandb==0.13.10
+imageio[ffmpeg]==2.25.1
 termcolor
 
 -e .
