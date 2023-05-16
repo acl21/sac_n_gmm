@@ -6,13 +6,13 @@ with open('README.md', 'r') as f:
 
 # setup
 setup(
-    name='SkillsSequencing',
+    name='SkillsRefining',
     version='',
     description='',
     long_description = long_description,
     long_description_content_type="text/markdown",
-    author='Noémie Jaquier, You Zhou, Julia Starke, Tamim Asfour',
-    author_email='noemie.jaquier@kit.edu',
+    author='A, B, C',
+    author_email='abs@def',
     maintainer=' ',
     maintainer_email='',
     license=' ',

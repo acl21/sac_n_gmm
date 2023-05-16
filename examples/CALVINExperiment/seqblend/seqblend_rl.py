@@ -12,7 +12,7 @@ from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 from examples.CALVINExperiment.rl.logger import Logger
 from examples.CALVINExperiment.rl.replay_buffer import ReplayBuffer
 import examples.CALVINExperiment.rl.utils as rl_utils
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 
 cwd_path = Path(__file__).absolute().parents[0]
 calvin_exp_path = cwd_path.parents[0]
@@ -179,7 +179,7 @@ class CALVINSeqBlendRL(object):
         self.evaluate()
 
 
-@hydra.main(version_base='1.1', config_path='../config', config_name='train_sac')
+@hydra.main(version_base='1.1', config_path='../config', config_name='seqblend_rl')
 def main(cfg: DictConfig) -> None:
     hydra_out_dir = hydra.core.hydra_config.HydraConfig.get()['runtime']['output_dir']
     cfg.work_dir = hydra_out_dir

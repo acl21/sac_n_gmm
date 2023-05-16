@@ -12,11 +12,11 @@ from torch.utils.data import DataLoader
 
 from examples.GripperExperiment.gripper_experiment_classes import Gripper2DExp
 from examples.GripperExperiment.gripper_pickplace_skills import *
-from SkillsSequencing.skills.skill_classes import *
-from SkillsSequencing.qpnet.constraints import TaskSpaceVariableConstraint
-from SkillsSequencing.qpnet import qpnet_policies as policy_classes
-from SkillsSequencing.qpnet.spec_datasets import SkillDataset
-from SkillsSequencing.robots.gripper.gripper2d import Gripper2D
+from SkillsRefining.skills.skill_classes import *
+from SkillsRefining.qpnet.constraints import TaskSpaceVariableConstraint
+from SkillsRefining.qpnet import qpnet_policies as policy_classes
+from SkillsRefining.qpnet.spec_datasets import SkillDataset
+from SkillsRefining.robots.gripper.gripper2d import Gripper2D
 
 device = prepare_torch()
 

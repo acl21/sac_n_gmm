@@ -1,5 +1,5 @@
 _target_: examples.CALVINExperiment.rl.agent.critic.DoubleQCritic
 obs_dim: ${agent.obs_dim}
 action_dim: ${agent.action_dim}
-hidden_dim: 1024
+hidden_dim: 256
 hidden_depth: 2

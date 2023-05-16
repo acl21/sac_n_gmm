@@ -1,11 +1,11 @@
-_target_: SkillsSequencing.skills.mps.dynsys.CLFDS.CLFDS
+_target_: SkillsRefining.skills.mps.dynsys.CLFDS.CLFDS
 _recursive_: true
 clf_model:
-  _target_: SkillsSequencing.skills.mps.dynsys.WSAQF.WSAQF
+  _target_: SkillsRefining.skills.mps.dynsys.WSAQF.WSAQF
   dim: ${dim}
   n_qfcn: 2
 reg_model:
-  _target_: SkillsSequencing.skills.mps.dynsys.FNN.SimpleNN
+  _target_: SkillsRefining.skills.mps.dynsys.FNN.SimpleNN
   in_dim: ${dim}
   out_dim: ${dim}
   n_layers: [20, 20]

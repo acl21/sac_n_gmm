@@ -2,8 +2,8 @@ import numpy as np
 
 from pymanopt.manifolds import Product
 
-from SkillsSequencing.skills.mps.gmr.statistics import multivariate_normal
-from SkillsSequencing.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
+from SkillsRefining.skills.mps.gmr.statistics import multivariate_normal
+from SkillsRefining.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
 
 
 def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_max=100):

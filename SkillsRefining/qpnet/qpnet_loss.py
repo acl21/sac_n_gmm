@@ -1,10 +1,10 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from SkillsSequencing.utils.matrices_processing import fill_diag
+from SkillsRefining.utils.matrices_processing import fill_diag
 from torch import Tensor
 
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 device = prepare_torch()
 
 

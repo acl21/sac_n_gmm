@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset
 
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 device = prepare_torch()
 
 

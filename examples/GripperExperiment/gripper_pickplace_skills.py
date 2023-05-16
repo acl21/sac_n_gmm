@@ -1,9 +1,9 @@
 import numpy as np
-from SkillsSequencing.skills.mps.dynsys.CLFDS import CLFDS
-from SkillsSequencing.skills.mps.dynsys.WSAQF import WSAQF
-from SkillsSequencing.skills.mps.dynsys.FNN import SimpleNN
+from SkillsRefining.skills.mps.dynsys.CLFDS import CLFDS
+from SkillsRefining.skills.mps.dynsys.WSAQF import WSAQF
+from SkillsRefining.skills.mps.dynsys.FNN import SimpleNN
 import torch
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 import matplotlib.pyplot as plt
 
 device = prepare_torch()

@@ -1,12 +1,12 @@
 import torch.optim as optim
 from qpth.qp import QPFunction
 
-from SkillsSequencing.qpnet.weights_net import FullyConnectedNet
-from SkillsSequencing.qpnet.constraints import *
-from SkillsSequencing.utils.matrices_processing import fill_diag
-from SkillsSequencing.qpnet.qpnet_loss import MultipleSkillsVelocityKktLoss
-from SkillsSequencing.utils.spd_manifold_utils import sqrtm_torch
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.qpnet.weights_net import FullyConnectedNet
+from SkillsRefining.qpnet.constraints import *
+from SkillsRefining.utils.matrices_processing import fill_diag
+from SkillsRefining.qpnet.qpnet_loss import MultipleSkillsVelocityKktLoss
+from SkillsRefining.utils.spd_manifold_utils import sqrtm_torch
+from SkillsRefining.utils.utils import prepare_torch
 
 device = prepare_torch()
 

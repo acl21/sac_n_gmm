@@ -1,8 +1,8 @@
 import abc
 import numpy as np
-from SkillsSequencing.utils.orientation_utils import sphere_logarithmic_map_batch
-from SkillsSequencing.utils.orientation_utils import compute_analytical_orientation_jacobian_sphere_batch
-from SkillsSequencing.utils.matrices_processing import assign_matrix
+from SkillsRefining.utils.orientation_utils import sphere_logarithmic_map_batch
+from SkillsRefining.utils.orientation_utils import compute_analytical_orientation_jacobian_sphere_batch
+from SkillsRefining.utils.matrices_processing import assign_matrix
 
 
 class Skill(object):

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cmx
 import matplotlib.animation as animation
 
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 device = prepare_torch()
 
 

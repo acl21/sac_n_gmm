@@ -9,6 +9,7 @@ seed: 42
 log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
+# output directory where demos will be saved
 demos_dir: /home/lagandua/datasets/calvin_demos2/
 
 root: /home/lagandua/projects/refining-skill-sequences

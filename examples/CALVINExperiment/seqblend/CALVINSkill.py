@@ -2,8 +2,8 @@ import os
 import logging
 import numpy as np
 from pymanopt.manifolds import Euclidean, Product
-from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsSequencing.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
+from SkillsRefining.skills.mps.gmr.manifold_gmr import manifold_gmr
+from SkillsRefining.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
 
 class CALVINSkill:
     """

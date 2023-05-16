@@ -1,9 +1,9 @@
 import numpy as np
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
-from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
-from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsSequencing.utils.plot_utils import visualize_3d_gmm
+from SkillsRefining.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
+from SkillsRefining.skills.mps.gmr.manifold_gmr import manifold_gmr
+from SkillsRefining.utils.plot_utils import visualize_3d_gmm
 
 import wandb
 import logging
@@ -125,7 +125,7 @@ class ManifoldGMM(object):
 
     def plot_gmm_mlab(self, input_space=True):
         from mayavi import mlab
-        from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+        from SkillsRefining.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
 
         if input_space:
             dim = 0

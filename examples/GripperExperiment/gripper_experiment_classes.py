@@ -2,9 +2,9 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib
 
-from SkillsSequencing.utils.orientation_utils import sphere_logarithmic_map_batch
-from SkillsSequencing.qpnet.constraints import *
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.orientation_utils import sphere_logarithmic_map_batch
+from SkillsRefining.qpnet.constraints import *
+from SkillsRefining.utils.utils import prepare_torch
 
 device = prepare_torch()
 

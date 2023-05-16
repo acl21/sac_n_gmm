@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 device = prepare_torch()
 
 

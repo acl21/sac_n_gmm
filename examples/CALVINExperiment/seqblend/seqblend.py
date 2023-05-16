@@ -9,9 +9,9 @@ from torch.utils.data import DataLoader
 from examples.CALVINExperiment.envs.task_env import TaskSpecificEnv
 from examples.CALVINExperiment.seqblend.CALVINExp import CALVINExp
 from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkillComplex
-from SkillsSequencing.qpnet.spec_datasets import SkillDataset
-from SkillsSequencing.qpnet import qpnet_policies as policy_classes
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.qpnet.spec_datasets import SkillDataset
+from SkillsRefining.qpnet import qpnet_policies as policy_classes
+from SkillsRefining.utils.utils import prepare_torch
 
 cwd_path = Path(__file__).absolute().parents[0]
 calvin_exp_path = cwd_path.parents[0]

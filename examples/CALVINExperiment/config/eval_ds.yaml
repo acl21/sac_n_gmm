@@ -15,12 +15,11 @@ root: /home/lagandua/projects/refining-skill-sequences
 # root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
 # Skill Demos
-# demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
 demos_dir: ${root}/examples/CALVINExperiment/data
 
 # Skill params
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_chosen.txt
+skills_list: ${skills_dir}/skillnames_close.txt
 state_type: 'pos'
 dim: none
 

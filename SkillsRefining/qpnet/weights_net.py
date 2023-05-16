@@ -5,8 +5,8 @@ from torch.nn.parameter import Parameter
 from torch.autograd import Variable
 import torch.nn as nn
 
-from SkillsSequencing.utils.matrices_processing import fill_tril
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.matrices_processing import fill_tril
+from SkillsRefining.utils.utils import prepare_torch
 
 device = prepare_torch()
 

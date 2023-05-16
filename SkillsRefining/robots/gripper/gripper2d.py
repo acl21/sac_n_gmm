@@ -1,8 +1,8 @@
 import numpy as np
 import roboticstoolbox as rtb
 
-from SkillsSequencing.utils.robot_plot_utils import plot_planar_robot
-from SkillsSequencing.utils.orientation_utils import rotation_matrix_to_unit_sphere
+from SkillsRefining.utils.robot_plot_utils import plot_planar_robot
+from SkillsRefining.utils.orientation_utils import rotation_matrix_to_unit_sphere
 
 
 class Gripper2D:

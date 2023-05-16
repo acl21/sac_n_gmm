@@ -1,4 +1,4 @@
-_target_: SkillsSequencing.skills.mps.dynsys.CALVIN_DS.CALVINDynSysDataset
+_target_: SkillsRefining.skills.mps.dynsys.CALVIN_DS.CALVINDynSysDataset
 skill: ${skill}
 train: ${train}
 state_type: ${state_type}

@@ -14,11 +14,11 @@ from mayavi import mlab
 import matplotlib.pyplot as plt
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
-from SkillsSequencing.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
-from SkillsSequencing.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
-from SkillsSequencing.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsSequencing.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
-from SkillsSequencing.utils.sphere_utils import sphere_parallel_transport
+from SkillsRefining.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
+from SkillsRefining.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
+from SkillsRefining.skills.mps.gmr.manifold_gmr import manifold_gmr
+from SkillsRefining.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+from SkillsRefining.utils.sphere_utils import sphere_parallel_transport
 
 
 if __name__ == '__main__':

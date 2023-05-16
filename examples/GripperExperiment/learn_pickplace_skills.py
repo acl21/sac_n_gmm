@@ -1,13 +1,13 @@
 import os
 import inspect
-from SkillsSequencing.skills.mps.dynsys.FNN import SimpleNN
-from SkillsSequencing.skills.mps.dynsys.WSAQF import WSAQF
-from SkillsSequencing.skills.mps.dynsys.CLFDS import CLFDS
-from SkillsSequencing.skills.mps.dynsys.dsdataset import DSDataSet
-from SkillsSequencing.utils.plot_utils import plot_2d_ds_velocity_field
+from SkillsRefining.skills.mps.dynsys.FNN import SimpleNN
+from SkillsRefining.skills.mps.dynsys.WSAQF import WSAQF
+from SkillsRefining.skills.mps.dynsys.CLFDS import CLFDS
+from SkillsRefining.skills.mps.dynsys.dsdataset import DSDataSet
+from SkillsRefining.utils.plot_utils import plot_2d_ds_velocity_field
 import numpy as np
 import matplotlib.pyplot as plt
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 
 device =prepare_torch()
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))

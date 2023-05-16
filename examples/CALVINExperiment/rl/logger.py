@@ -129,6 +129,14 @@ class Logger(object):
             "num_eval_episodes": cfg.num_eval_episodes,
             "accumulate_steps": cfg.accumulate_steps,
             "env_max_episode_steps": cfg.env_max_episode_steps,
+            "batch_size": cfg.agent.batch_size,
+            "lr_actor": cfg.agent.actor_lr,
+            "lr_critic": cfg.agent.critic_lr,
+            "lr_alpha": cfg.agent.alpha_lr,
+            "hidden_dim_actor": cfg.actor.hidden_dim,
+            "hidden_depth_actor": cfg.actor.hidden_depth,
+            "hidden_dim_critic": cfg.critic.hidden_dim,
+            "hidden_depth_critic": cfg.critic.hidden_depth,
             }
             wandb.init(project=agent, entity='in-ac', config=config)
 

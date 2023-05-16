@@ -3,7 +3,7 @@ import torch
 import logging
 import numpy as np
 import matplotlib.pyplot as plt
-from SkillsSequencing.utils.utils import prepare_torch
+from SkillsRefining.utils.utils import prepare_torch
 from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 
 device = prepare_torch()

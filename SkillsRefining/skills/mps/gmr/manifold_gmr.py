@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import block_diag
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
-from SkillsSequencing.skills.mps.gmr.statistics import multivariate_normal
+from SkillsRefining.skills.mps.gmr.statistics import multivariate_normal
 
 
 def manifold_gmr(input_data, manifold, gmm_means, gmm_covariances, gmm_priors, in_manifold_idx=[0],

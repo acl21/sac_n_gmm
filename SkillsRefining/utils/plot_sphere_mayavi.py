@@ -4,7 +4,7 @@ from mayavi import mlab
 from typing import Union, Tuple
 import scipy
 
-from SkillsSequencing.utils.sphere_utils import get_axisangle, rotation_matrix_from_axis_angle
+from SkillsRefining.utils.sphere_utils import get_axisangle, rotation_matrix_from_axis_angle
 
 
 def plot_sphere(color: Tuple = (0.7, 0.7, 0.7), opacity: float = 0.8, radius: float = 0.99, n_elems: int = 100,
