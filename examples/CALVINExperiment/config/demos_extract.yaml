@@ -1,27 +1,27 @@
 defaults:
-  - datamodule: default
+  - extractmodule: default
   - _self_
 
   - override hydra/job_logging: colorlog
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
-# output directory where demos will be saved
-demos_dir: /home/lagandua/datasets/calvin_demos2/
-
 root: /home/lagandua/projects/refining-skill-sequences
-skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_all.txt
+
+log_dir: ${root}/examples/CALVINExperiment/logs
+# output directory where demos will be saved
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
+
+skills_to_extract: ${root}/examples/CALVINExperiment/demos_extract/skills_to_extract.txt
 skill: null
 
 hydra:
   run:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/extract-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/extract-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

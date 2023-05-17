@@ -5,7 +5,10 @@ import imageio
 import cv2
 import os
 
-from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import PlayTableSimEnv
+from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import (
+    PlayTableSimEnv,
+)
+
 
 class TaskSpecificEnv(PlayTableSimEnv):
     def __init__(self, tasks={}, target_tasks=[], sequential=True, **kwargs):
@@ -17,7 +20,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
         self.completed_tasks_so_far = []
         self.sequential = sequential
-        self.state_type = 'pos'
+        self.state_type = "pos"
         self.frames = []
         self._max_episode_steps = 0
 
@@ -41,10 +44,14 @@ class TaskSpecificEnv(PlayTableSimEnv):
                     self.tasks_to_complete.remove(task)
                     self.completed_tasks_so_far.append(task)
             if len(self.completed_tasks_so_far) == 1:
-                if task == 'open_drawer':
-                    self.start_info['scene_info']['doors']['base__drawer']['current_state'] = 0.2
-                elif task == 'close_drawer':
-                    self.start_info['scene_info']['doors']['base__drawer']['current_state'] = 0.0
+                if task == "open_drawer":
+                    self.start_info["scene_info"]["doors"]["base__drawer"][
+                        "current_state"
+                    ] = 0.2
+                elif task == "close_drawer":
+                    self.start_info["scene_info"]["doors"]["base__drawer"][
+                        "current_state"
+                    ] = 0.0
             if len(self.tasks_to_complete) == 0:
                 return True
             else:
@@ -62,7 +69,11 @@ class TaskSpecificEnv(PlayTableSimEnv):
     def _termination(self):
         """Indicates if the robot has reached a terminal state"""
         done = len(self.tasks_to_complete) == 0
-        d_info = {"success": done, "tasks_to_complete": self.tasks_to_complete, "completed_tasks": self.completed_tasks_so_far}
+        d_info = {
+            "success": done,
+            "tasks_to_complete": self.tasks_to_complete,
+            "completed_tasks": self.completed_tasks_so_far,
+        }
         return done, d_info
 
     def step(self, action):
@@ -78,7 +89,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         """
         # Transform gripper action to discrete space
         env_action = action.copy()
-        env_action['action'][-1] = (int(action['action'][-1] >= 0) * 2) - 1
+        env_action["action"][-1] = (int(action["action"][-1] >= 0) * 2) - 1
         self.robot.apply_action(env_action)
         for i in range(self.action_repeat):
             self.p.stepSimulation(physicsClientId=self.cid)
@@ -92,11 +103,11 @@ class TaskSpecificEnv(PlayTableSimEnv):
 
     def prepare_action(self, input, type):
         action = []
-        if self.state_type == 'joint':
-            action = {'type': f'joint_{type}', 'action': None}
-        elif 'pos' in self.state_type:
-            action = {'type': f'cartesian_{type}', 'action': None}
-            action['action'] = input
+        if self.state_type == "joint":
+            action = {"type": f"joint_{type}", "action": None}
+        elif "pos" in self.state_type:
+            action = {"type": f"cartesian_{type}", "action": None}
+            action["action"] = input
 
         return action
 
@@ -121,14 +132,14 @@ class TaskSpecificEnv(PlayTableSimEnv):
             depth_obs[f"depth_{cam.name}"] = depth
         return rgb_obs, depth_obs
 
-    def record_frame(self, obs_type='rgb', cam_type='static', size=208):
+    def record_frame(self, obs_type="rgb", cam_type="static", size=208):
         """Record RGB obsservation"""
         rgb_obs, depth_obs = self.get_camera_obs()
-        if obs_type == 'rgb':
-            frame = rgb_obs[f'{obs_type}_{cam_type}']
+        if obs_type == "rgb":
+            frame = rgb_obs[f"{obs_type}_{cam_type}"]
         else:
-            frame = depth_obs[f'{obs_type}_{cam_type}']
-        frame = cv2.resize(frame, (size, size), interpolation = cv2.INTER_AREA)
+            frame = depth_obs[f"{obs_type}_{cam_type}"]
+        frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
         self.frames.append(frame)
 
     def reset_recorded_frames(self):
@@ -137,8 +148,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
 
     def save_recorded_frames(self, outdir, fname):
         """Save recorded frames as a video"""
-        fname = f'{fname}.mp4'
+        fname = f"{fname}.mp4"
         fpath = os.path.join(outdir, fname)
         imageio.mimsave(fpath, self.frames, fps=30)
         return fpath
-    

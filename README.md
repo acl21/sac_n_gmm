@@ -9,29 +9,32 @@ However, install the following from their respective sources:
 * PyTorch and TorchVision from their [official website](https://pytorch.org/). 
 * `calvin_env` dependencies from [their repo](https://github.com/mees/calvin_env).
 
-## CALVINExperiment
+## CALVINExperimentp
+
+### Step 0: Download CALVIN dataset
+Download the [CALVIN dataset](https://github.com/mees/calvin) and place it inside [data/](./examples/CALVINExperiment/data/). 
 
 ### Step 1: Extract skill demos from the CALVIN dataset
-Download the CALVIN dataset (`task_D_D`) and configure appropriately in [config/datamodule/dataset/calvin.yaml](./examples/CALVINExperiment/config/datamodule/dataset/calvin.yaml). Similary, configure [config/demos_extract.yaml](./examples/CALVINExperiment/config/demos_extract.yaml).
+Configure [config/demos_extract.yaml](./examples/CALVINExperiment/config/demos_extract.yaml).
 ```
-> cd examples/CALVINExperiment/demos_extract/
-> python extract.py
+> cd examples/CALVINExperiment/
+> python demos_extract/extract.py
 ```
 
 ### Step 2: Train and evaluate skill libraries (Dynamical Systems) with ManifoldGMM 
 Configure [config/train_ds.yaml](./examples/CALVINExperiment/config/train_ds.yaml).
 ```
-> cd examples/CALVINExperiment/dynsys/
-> python train_skills.py
+> cd examples/CALVINExperiment/
+> python dynsys/train_skills.py
 ```
 Configure [config/eval_ds.yaml](./examples/CALVINExperiment/config/eval_ds.yaml).
 ```
-> cd examples/CALVINExperiment/dynsys/
-> python eval_skills.py
+> cd examples/CALVINExperiment/
+> python dynsys/eval_skills.py
 ```
 
 ### Step 3: Train RL Agent
-Configure [config/seqblend_rl.yaml](./examples/CALVINExperiment/config/seqblend_rl.yaml).
+Configure [config/seqblend_rl.yaml](./examples/CALVINExperiment/config/seqblend_rl.yaml) and relevant default configs.
 ```
 > cd examples/CALVINExperiment/seqblend/
 > python seqblend_rl.py

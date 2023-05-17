@@ -7,24 +7,28 @@ defaults:
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
-# root: /home/lagandua/projects/refining-skill-sequences
-root: E:/Uni-Freiburg/Research/refining-skill-sequences
+root: /home/lagandua/projects/refining-skill-sequences
+# root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
-# Skill Demos
-# demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
-demos_dir: ${root}/examples/CALVINExperiment/data
+log_dir: ${root}/examples/CALVINExperiment/logs
 
-# Skill params
-skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_chosen.txt
+# Skill demos directory
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
+
+# Skills to train (txt file)
+skills_to_train: ${root}/examples/CALVINExperiment/demos_extract/skills_to_extract.txt
+
+# Learned skill params are saved in this output directory
+skills_out_dir: ${root}/examples/CALVINExperiment/skills_ds
+
+# GMM input type
 state_type: 'pos'
-dim: none
+dim: 3
 
 # Dataset params:
-skill: none
+skill: null
 train: true # false to load validation dataset
 goal_centered: true
 dt: 0.0666
@@ -40,19 +44,19 @@ is_quaternion: false
 gmm_components: 5
 plot: true
 
-# Training params
+# CLFDS params
 lr: 1e-3
 max_epochs: 3000
 batch_size: 100
 
-# WANDB Logging Params
+# WANDB Logging params
 wandb: false
 
 hydra:
   run:
-    dir: ${log_dir}/train-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/ds-train-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/train-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/ds-train-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

@@ -8,11 +8,11 @@ defaults:
 
 seed: 42
 slurm: false
-# root: /home/lagandua/projects/refining-skill-sequences
-root: E:/Uni-Freiburg/Research/refining-skill-sequences
+root: /home/lagandua/projects/refining-skill-sequences
+# root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
 log_dir: ${root}/examples/CALVINExperiment/logs
-demos_dir: ${root}/examples/CALVINExperiment/data
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 
 # Task params

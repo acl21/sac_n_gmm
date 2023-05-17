@@ -1,6 +1,6 @@
 defaults:
   - calvin_env: default
-  - dataset: calvin_ds # use calvin_task when evaluating task demos 
+  - dataset: calvin_ds # use calvin_task for task demos otherwise calvin_ds 
   - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
 
@@ -8,26 +8,27 @@ defaults:
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
-# root: /home/lagandua/projects/refining-skill-sequences
-root: E:/Uni-Freiburg/Research/refining-skill-sequences
+root: /home/lagandua/projects/refining-skill-sequences
+# root: E:/Uni-Freiburg/Research/refining-skill-sequences
+
+log_dir: ${root}/examples/CALVINExperiment/logs
+exp_dir: null
 
 # Task params
 target_tasks: ['open_drawer', 'close_drawer']
 task_sequential: true
 
 # Task Demos
-# demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
-demos_dir: ${root}/examples/CALVINExperiment/data
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
 
 # Task params
 task: ${target_tasks} 
 state_type: 'pos'
-dim: none
+dim: null
 
-# Skill library
+# Skill library where skill params are stored
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 
 # Dataset params:
@@ -44,17 +45,16 @@ max_steps: 240
 # ds_type: 'gmm'
 
 # GMM params
-gmm_components: 6
-plot: false
+gmm_components: null
+plot: null
 
 # Environment params
-render: true
+render: false
 record: false
 
 # WANDB Logging Params
 wandb: false
 
-temp: false
 
 hydra:
   run:

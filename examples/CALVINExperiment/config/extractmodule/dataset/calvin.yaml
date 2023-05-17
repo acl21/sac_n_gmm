@@ -1,4 +1,4 @@
 _target_: examples.CALVINExperiment.demos_extract.datasets.calvin_dataset.CalvinDataset
 _recursive_: false
 
-data_dir: /export/data/calvin/task_D_D
+data_dir: ${root}/examples/CALVINExperiment/data/calvin/task_D_D

@@ -1,8 +1,8 @@
 import os
 import sys
 import hydra
-import numpy as np
 import logging
+import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
 from pytorch_lightning import seed_everything
@@ -12,9 +12,8 @@ calvin_exp_path = cwd_path.parents[0]
 root = calvin_exp_path.parents[0]
 
 # This is to access the locally installed repo clone when using slurm
-sys.path.insert(0, calvin_exp_path.as_posix()) # CALVINExperiment
-sys.path.insert(0, os.path.join(calvin_exp_path, 'calvin_env')) # CALVINExperiment/calvin_env
-sys.path.insert(0, root.as_posix()) # Root
+sys.path.insert(0, calvin_exp_path.as_posix())  # CALVINExperiment
+sys.path.insert(0, root.as_posix())  # Root
 
 logger = logging.getLogger(__name__)
 os.chdir(cwd_path)
@@ -38,7 +37,13 @@ def save_demonstrations(datamodule, save_dir, skill):
         for i in range(len(split_iter)):
             demo = next(split_iter)
             demo = np.concatenate(
-                [np.repeat(time[np.newaxis, :, :], demo["robot_obs"].size(0), axis=0), demo["robot_obs"]], axis=2
+                [
+                    np.repeat(
+                        time[np.newaxis, :, :], demo["robot_obs"].size(0), axis=0
+                    ),
+                    demo["robot_obs"],
+                ],
+                axis=2,
             )
             demos += [demo]
 
@@ -48,7 +53,7 @@ def save_demonstrations(datamodule, save_dir, skill):
         np.save(save_dir, demos)
 
 
-@hydra.main(version_base='1.1', config_path="../config", config_name="demos_extract")
+@hydra.main(version_base="1.1", config_path="../../config", config_name="demos_extract")
 def extract_demos(cfg: DictConfig) -> None:
     """
     This is called to extract demonstrations for a specific skill.
@@ -56,7 +61,9 @@ def extract_demos(cfg: DictConfig) -> None:
         cfg: hydra config
     """
     seed_everything(cfg.seed, workers=True)
-    f = open(cfg.skills_list, "r")
+    os.makedirs(cfg.log_dir, exist_ok=True)
+    os.makedirs(cfg.demos_dir, exist_ok=True)
+    f = open(cfg.skills_to_extract, "r")
     skill_set = f.read()
     skill_set = skill_set.split("\n")
     for skill in skill_set:

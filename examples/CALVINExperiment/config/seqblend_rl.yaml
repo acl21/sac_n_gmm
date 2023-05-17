@@ -14,7 +14,7 @@ seed: 42
 log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
-work_dir: null
+exp_dir: null
 
 root: /home/lagandua/projects/refining-skill-sequences
 # root: E:/Uni-Freiburg/Research/refining-skill-sequences
@@ -25,7 +25,7 @@ task_sequential: true
 
 # Task Demos
 # demos_dir: /work/dlclarge1/lagandua-refine-skills/calvin_demos/
-demos_dir: ${root}/examples/CALVINExperiment/data
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
 
 # Task params
 task: ${target_tasks} 
@@ -73,7 +73,6 @@ env_max_episode_steps: 20
 # WANDB Logging Params
 wandb: true
 
-temp: false
 
 hydra:
   run:

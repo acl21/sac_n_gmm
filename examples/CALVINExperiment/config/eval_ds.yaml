@@ -1,5 +1,5 @@
 defaults:
-  - calvin_env: default_close
+  - calvin_env: default # or default_close for close_drawer
   - dataset: calvin_ds 
   - dyn_sys: manifold_gmm # clfds or manifold_gmm
   - _self_
@@ -8,23 +8,28 @@ defaults:
   - override hydra/hydra_logging: colorlog
 
 seed: 42
-log_dir: ${root}/examples/CALVINExperiment/logs
 slurm: false
 
 root: /home/lagandua/projects/refining-skill-sequences
 # root: E:/Uni-Freiburg/Research/refining-skill-sequences
 
-# Skill Demos
-demos_dir: ${root}/examples/CALVINExperiment/data
+log_dir: ${root}/examples/CALVINExperiment/logs
 
-# Skill params
+# Skill demos directory
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
+
+# Skills to eval (txt file)
+skills_to_eval: ${root}/examples/CALVINExperiment/demos_extract/skills_to_extract.txt
+
+# Trained skill params are saved in directory
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-skills_list: ${skills_dir}/skillnames_close.txt
+
+# GMM input type
 state_type: 'pos'
-dim: none
+dim: 3
 
 # Dataset params:
-skill: none
+skill: null
 train: false # false to load validation dataset
 goal_centered: false # this must be false during evaluation
 dt: 0.0666
@@ -38,8 +43,8 @@ max_steps: 240
 # ds_type: 'gmm'
 
 # GMM params
-gmm_components: 6
-plot: false
+gmm_components: null
+plot: null
 
 # Environment params
 render: false
@@ -48,13 +53,12 @@ record: false
 # WANDB Logging Params
 wandb: false
 
-temp: false
 
 hydra:
   run:
-    dir: ${log_dir}/eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/ds-eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
   sweep:
-    dir: ${log_dir}/eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    dir: ${log_dir}/ds-eval-runs/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

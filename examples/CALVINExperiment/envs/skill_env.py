@@ -1,5 +1,7 @@
 from gym import spaces
-from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import PlayTableSimEnv
+from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import (
+    PlayTableSimEnv,
+)
 import hydra
 import imageio
 import os
@@ -23,7 +25,6 @@ class SkillSpecificEnv(PlayTableSimEnv):
         self.frames = []
         self.outdir = None
         self.record_count = 1
-
 
     def set_skill(self, skill):
         """Set skill name"""
@@ -58,14 +59,14 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """Set output directory where recordings can/will be saved"""
         self.outdir = outdir
 
-    def record_frame(self, obs_type='rgb', cam_type='static', size=208):
+    def record_frame(self, obs_type="rgb", cam_type="static", size=208):
         """Record RGB obsservation"""
         rgb_obs, depth_obs = self.get_camera_obs()
-        if obs_type == 'rgb':
-            frame = rgb_obs[f'{obs_type}_{cam_type}']
+        if obs_type == "rgb":
+            frame = rgb_obs[f"{obs_type}_{cam_type}"]
         else:
-            frame = depth_obs[f'{obs_type}_{cam_type}']
-        frame = cv2.resize(frame, (size, size), interpolation = cv2.INTER_AREA)
+            frame = depth_obs[f"{obs_type}_{cam_type}"]
+        frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
         self.frames.append(frame)
 
     def reset_recorded_frames(self):
@@ -75,17 +76,29 @@ class SkillSpecificEnv(PlayTableSimEnv):
     def save_recorded_frames(self, path=None):
         """Save recorded frames as a video"""
         if path is None:
-            imageio.mimsave(os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count}.mp4'), self.frames, fps=30)
+            imageio.mimsave(
+                os.path.join(
+                    self.outdir,
+                    f"{self.skill_name}_{self.state_type}_{self.record_count}.mp4",
+                ),
+                self.frames,
+                fps=30,
+            )
             self.record_count += 1
         else:
             imageio.mimsave(path, self.frames, fps=30)
-        return os.path.join(self.outdir, f'{self.skill_name}_{self.state_type}_{self.record_count-1}.mp4')
+        return os.path.join(
+            self.outdir,
+            f"{self.skill_name}_{self.state_type}_{self.record_count-1}.mp4",
+        )
 
     def _success(self):
         """Returns a boolean indicating if the task was performed correctly"""
         current_info = self.get_info()
         task_filter = [self.skill_name]
-        task_info = self.tasks.get_task_info_for_set(self.start_info, current_info, task_filter)
+        task_info = self.tasks.get_task_info_for_set(
+            self.start_info, current_info, task_filter
+        )
         return self.skill_name in task_info
 
     def _reward(self):
@@ -103,28 +116,27 @@ class SkillSpecificEnv(PlayTableSimEnv):
         return done, d_info
 
     def get_valid_columns(self):
-        if 'joint' in self.state_type:
+        if "joint" in self.state_type:
             start, end = 8, 15
-        elif 'pos_ori' in self.state_type:
+        elif "pos_ori" in self.state_type:
             start, end = 1, 7
-        elif 'pos' in self.state_type:
+        elif "pos" in self.state_type:
             start, end = 1, 4
-        elif 'ori' in self.state_type:
+        elif "ori" in self.state_type:
             start, end = 4, 7
-        elif 'grip' in self.state_type:
+        elif "grip" in self.state_type:
             start, end = 7, 8
-        return start-1, end-1
+        return start - 1, end - 1
 
     def prepare_action(self, input, type):
         action = []
-        if self.state_type == 'joint':
-            action = {'type': f'joint_{type}', 'action': None}
-        elif 'pos' in self.state_type:
-            action = {'type': f'cartesian_{type}', 'action': None}
-            action['action'] = input
+        if self.state_type == "joint":
+            action = {"type": f"joint_{type}", "action": None}
+        elif "pos" in self.state_type:
+            action = {"type": f"cartesian_{type}", "action": None}
+            action["action"] = input
 
         return action
-
 
     def step(self, action):
         """Performing a relative action in the environment
@@ -139,7 +151,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """
         # Transform gripper action to discrete space
         env_action = action.copy()
-        env_action['action'][-1] = (int(action['action'][-1] >= 0) * 2) - 1
+        env_action["action"][-1] = (int(action["action"][-1] >= 0) * 2) - 1
         self.robot.apply_action(env_action)
         for i in range(self.action_repeat):
             self.p.stepSimulation(physicsClientId=self.cid)

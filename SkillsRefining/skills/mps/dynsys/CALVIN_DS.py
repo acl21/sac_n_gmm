@@ -8,11 +8,20 @@ import pybullet as p
 
 from .utils import plot_3d_trajectories
 
+
 class CALVINDynSysDataset(Dataset):
-    def __init__(self, skill, train=True, state_type='joint',
-                 demos_dir='/work/dlclarge1/lagandua-refine-skills/calvin_demos/',
-                 goal_centered=False, dt=2/30, sampling_dt=1/30,
-                 normalized=False, is_quaternion=False):
+    def __init__(
+        self,
+        skill,
+        train=True,
+        state_type="joint",
+        demos_dir="",
+        goal_centered=False,
+        dt=2 / 30,
+        sampling_dt=1 / 30,
+        normalized=False,
+        is_quaternion=False,
+    ):
         self.skill = skill
         self.demos_dir = demos_dir
         self.goal_centered = goal_centered
@@ -27,23 +36,26 @@ class CALVINDynSysDataset(Dataset):
         self.start = None
         self.goal = None
         if self.train:
-            fname = 'training'
+            fname = "training"
         else:
-            fname = 'validation'
-        self.data_file = glob.glob(os.path.join(self.demos_dir, self.skill, f'{fname}.npy'))[0]
+            fname = "validation"
+        assert os.path.isdir(self.demos_dir), "Demos directory does not exist!"
+        self.data_file = glob.glob(
+            os.path.join(self.demos_dir, self.skill, f"{fname}.npy")
+        )[0]
         self.state_type = state_type
 
         start_idx, end_idx = self.get_valid_columns(self.state_type)
-        self.X = np.load(self.data_file)[:,:,start_idx:end_idx]
+        self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
         # Get the last orientation from the trajectory (this is bad for orientation dependant tasks)
-        s_idx, e_idx = self.get_valid_columns('ori')
-        temp_ori = np.load(self.data_file)[:,:,s_idx:e_idx]
+        s_idx, e_idx = self.get_valid_columns("ori")
+        temp_ori = np.load(self.data_file)[:, :, s_idx:e_idx]
         self.fixed_ori = temp_ori[0, -1, :]
 
-        if self.state_type == 'ori' and is_quaternion:
+        if self.state_type == "ori" and is_quaternion:
             self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
-        elif self.state_type == 'pos_ori' and is_quaternion:
+        elif self.state_type == "pos_ori" and is_quaternion:
             oris = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X[:, :, 3:])
             self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
@@ -51,7 +63,7 @@ class CALVINDynSysDataset(Dataset):
         self.goal = np.mean(self.X[:, -1, :], axis=0)
         if self.goal_centered:
             # Make X goal centered i.e., subtract each trajectory with its goal
-            self.X = self.X-np.expand_dims(self.X[:,-1,:], axis=1)
+            self.X = self.X - np.expand_dims(self.X[:, -1, :], axis=1)
 
         if self.normalized:
             self.set_mins_and_maxs(self.X)
@@ -74,29 +86,31 @@ class CALVINDynSysDataset(Dataset):
         self.X_maxs = np.max(data.reshape(-1, data.shape[-1]), axis=0)
 
     def normalize(self, x):
-        """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
-        """
+        """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1"""
         assert self.X_mins is not None, "Cannot normalize with X_mins as None"
         assert self.X_maxs is not None, "Cannot normalize with X_maxs as None"
-        return (self.norm_range[-1] - self.norm_range[0]) * (x - self.X_mins)/ (self.X_maxs - self.X_mins) + self.norm_range[0]
+        return (self.norm_range[-1] - self.norm_range[0]) * (x - self.X_mins) / (
+            self.X_maxs - self.X_mins
+        ) + self.norm_range[0]
 
     def undo_normalize(self, x):
-        """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1
-        """
+        """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1"""
         assert self.X_mins is not None, "Cannot undo normalization with X_mins as None"
         assert self.X_maxs is not None, "Cannot undo normalization with X_maxs as None"
-        return (x - self.norm_range[0])*(self.X_maxs - self.X_mins)/(self.norm_range[-1] - self.norm_range[0]) + self.X_mins
+        return (x - self.norm_range[0]) * (self.X_maxs - self.X_mins) / (
+            self.norm_range[-1] - self.norm_range[0]
+        ) + self.X_mins
 
     def get_valid_columns(self, state_type):
-        if 'joint' in state_type:
+        if "joint" in state_type:
             start, end = 8, 15
-        elif 'pos_ori' in state_type:
+        elif "pos_ori" in state_type:
             start, end = 1, 7
-        elif 'pos' in state_type:
+        elif "pos" in state_type:
             start, end = 1, 4
-        elif 'ori' in state_type:
+        elif "ori" in state_type:
             start, end = 4, 7
-        elif 'grip' in state_type:
+        elif "grip" in state_type:
             start, end = 7, 8
         return start, end
 
