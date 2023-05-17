@@ -125,6 +125,7 @@ class CALVINSeqBlendRL(object):
     def run(self):
         episode, episode_reward, done, done_no_max = 0, 0, True, True
         start_time = time.time()
+        episode_step = 0
         while self.step < self.cfg.num_train_steps:
             if done or episode_step >= self.env._max_episode_steps:
                 if self.step > 0:

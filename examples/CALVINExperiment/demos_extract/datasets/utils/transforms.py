@@ -18,7 +18,9 @@ class AddGaussianNoise(object):
         return tensor + torch.randn(tensor.size(), device=device) * self.std + self.mean
 
     def __repr__(self):
-        return self.__class__.__name__ + "(mean={0}, std={1})".format(self.mean, self.std)
+        return self.__class__.__name__ + "(mean={0}, std={1})".format(
+            self.mean, self.std
+        )
 
 
 class ArrayToTensor(object):

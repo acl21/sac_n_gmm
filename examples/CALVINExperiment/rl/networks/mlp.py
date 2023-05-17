@@ -1,12 +1,14 @@
 import torch
 from torch import nn
 
+
 def weight_init(m):
     """Custom weight init for Conv2D and Linear layers."""
     if isinstance(m, nn.Linear):
         nn.init.orthogonal_(m.weight.data)
-        if hasattr(m.bias, 'data'):
+        if hasattr(m.bias, "data"):
             m.bias.data.fill_(0.0)
+
 
 def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None):
     if hidden_depth == 0:
@@ -21,16 +23,13 @@ def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None):
     trunk = nn.Sequential(*mods)
     return trunk
 
+
 class MLP(nn.Module):
-    def __init__(self,
-                 input_dim,
-                 hidden_dim,
-                 output_dim,
-                 hidden_depth,
-                 output_mod=None):
+    def __init__(
+        self, input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None
+    ):
         super().__init__()
-        self.trunk = mlp(input_dim, hidden_dim, output_dim, hidden_depth,
-                         output_mod)
+        self.trunk = mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod)
         self.apply(weight_init)
 
     def forward(self, x):

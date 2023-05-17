@@ -18,6 +18,11 @@ def sqrtm_torch(x):
     """
     eigenvalues, eigenvectors = torch.symeig(x, eigenvectors=True)
 
-    sqrt_eigenvalues = torch.sqrt(torch.maximum(eigenvalues, torch.zeros_like(eigenvalues)))  # Assume real eigenvalues (first column only)
+    sqrt_eigenvalues = torch.sqrt(
+        torch.maximum(eigenvalues, torch.zeros_like(eigenvalues))
+    )  # Assume real eigenvalues (first column only)
 
-    return torch.matmul(eigenvectors, torch.matmul(torch.diag_embed(sqrt_eigenvalues), torch.inverse(eigenvectors)))
+    return torch.matmul(
+        eigenvectors,
+        torch.matmul(torch.diag_embed(sqrt_eigenvalues), torch.inverse(eigenvectors)),
+    )

@@ -1,4 +1,6 @@
-import os, inspect
+import os
+import inspect
+
 current_dir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 os.sys.path.insert(0, "..")
 os.sys.path.insert(0, current_dir)
@@ -7,8 +9,11 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
+
 class SimpleNN(nn.Module):
-    def __init__(self, in_dim, out_dim, n_layers=(20,20), act="leaky_relu", out_act=None):
+    def __init__(
+        self, in_dim, out_dim, n_layers=(20, 20), act="leaky_relu", out_act=None
+    ):
         super(SimpleNN, self).__init__()
         layers = []
         in_ = in_dim
@@ -59,13 +64,17 @@ class SimpleNN(nn.Module):
         input.requires_grad = True
 
         z = self.forward(input)
-        grad = torch.autograd.grad(z, [input], grad_outputs=torch.ones_like(z), retain_graph=True)[0]
+        grad = torch.autograd.grad(
+            z, [input], grad_outputs=torch.ones_like(z), retain_graph=True
+        )[0]
         return z, grad
 
     def print_struct(self):
         print(self.fnn)
 
-    def simple_train(self, dataset, lrate=1e-3, batch_size=100, max_epochs=100, fname='simple_nn'):
+    def simple_train(
+        self, dataset, lrate=1e-3, batch_size=100, max_epochs=100, fname="simple_nn"
+    ):
         dataloader = DataLoader(dataset, batch_size=batch_size)
         optim = torch.optim.Adam(self.parameters(), lr=lrate)
         for epoch in range(max_epochs):
@@ -82,8 +91,6 @@ class SimpleNN(nn.Module):
             if epoch % 20 == 0:
                 torch.save(self, fname)
 
-            print('epoch: %1d, cost: %.8f' % (epoch, epoch_cost/i), end='\r')
+            print("epoch: %1d, cost: %.8f" % (epoch, epoch_cost / i), end="\r")
 
-        print('epoch: %1d, cost: %.8f' % (epoch, epoch_cost / i), end='\r')
-
-
+        print("epoch: %1d, cost: %.8f" % (epoch, epoch_cost / i), end="\r")

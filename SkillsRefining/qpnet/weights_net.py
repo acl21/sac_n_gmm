@@ -16,6 +16,7 @@ class FullyConnectedNet(nn.Module):
     Instances of this class are neural networks with one fully-connected layer. These networks are used to compute the
     parameters of a following OptNet layer based on given input data.
     """
+
     def __init__(self, in_dim, out_dim, out_act=None, n_layers=None):
         """
         Initialization of the FullyConnectedNet class.
@@ -39,7 +40,7 @@ class FullyConnectedNet(nn.Module):
             out_feat = n_layers[i]
             layer = nn.Linear(in_feat, out_feat)
             for param in layer.parameters():
-                nn.init.uniform_(param, -1/in_feat, 1/in_feat)
+                nn.init.uniform_(param, -1 / in_feat, 1 / in_feat)
                 # nn.init.uniform_(param, -.1, .1)
 
             layers.append(layer)
@@ -73,6 +74,7 @@ class PSDNet(nn.Module):
     Instances of this class are neural networks generating SPD matrices. These networks are used to compute the
     parameters of a following OptNet layer based on given input data.
     """
+
     def __init__(self, in_dim, out_dim, out_act=None, n_layers=None):
         """
         Initialization of the FullyConnectedNet class.
@@ -97,7 +99,7 @@ class PSDNet(nn.Module):
             out_feat = n_layers[i]
             layer = nn.Linear(in_feat, out_feat)
             for param in layer.parameters():
-                nn.init.uniform_(param, -1/in_feat, 1/in_feat)
+                nn.init.uniform_(param, -1 / in_feat, 1 / in_feat)
 
             layers.append(layer)
             if i < len(n_layers) - 1:
@@ -135,8 +137,11 @@ class PSDNet(nn.Module):
         # Compute the eigenvalue decomposition
         eigenvalues, eigenvectors = torch.symeig(Q, eigenvectors=True)
         # Softmax to constraint the eigenvalue of the matrix, i.e, norm(Q, fro) = 1
-        eigenvalues = torch.sqrt(nn.Softmax(-1)(torch.exp(eigenvalues)**2))
-        Q = torch.matmul(eigenvectors, torch.matmul(torch.diag_embed(eigenvalues), torch.inverse(eigenvectors)))
+        eigenvalues = torch.sqrt(nn.Softmax(-1)(torch.exp(eigenvalues) ** 2))
+        Q = torch.matmul(
+            eigenvectors,
+            torch.matmul(torch.diag_embed(eigenvalues), torch.inverse(eigenvectors)),
+        )
 
         return Q
 
@@ -146,6 +151,7 @@ class SymmetricNet(nn.Module):
     Instances of this class are neural networks generating symmetric matrices. These networks are used to compute the
     parameters of a following OptNet layer based on given input data.
     """
+
     def __init__(self, in_dim, out_dim, out_act=None, n_layers=None):
         """
         Initialization of the FullyConnectedNet class.
@@ -170,7 +176,7 @@ class SymmetricNet(nn.Module):
             out_feat = n_layers[i]
             layer = nn.Linear(in_feat, out_feat)
             for param in layer.parameters():
-                nn.init.uniform_(param, -1/in_feat, 1/in_feat)
+                nn.init.uniform_(param, -1 / in_feat, 1 / in_feat)
 
             layers.append(layer)
             if i < len(n_layers) - 1:
@@ -199,7 +205,7 @@ class SymmetricNet(nn.Module):
         ldata = nn.Tanh()(ldata)
 
         # Build lower triangular matrix
-        L = fill_tril(ldata, dim=int((np.sqrt(8 * ldata.shape[-1] + 1) -1)/2))
+        L = fill_tril(ldata, dim=int((np.sqrt(8 * ldata.shape[-1] + 1) - 1) / 2))
         # Symmetric matrix
         Q = L + L.transpose(-1, -2)
 
@@ -211,7 +217,20 @@ class OneLayerOptNet(nn.Module):
     Instances of this class are neural networks composed by an OptNet layer.
     The OptNet layer solves a QP of the form: argmin_x  0.5*x'Qx + p'x subject to Gx <= h and Ax = b.
     """
-    def __init__(self, ndim, nineq=0, neq=0, eps=1e-4, Q=None, q=None, A=None, b=None, G=None, h=None):
+
+    def __init__(
+        self,
+        ndim,
+        nineq=0,
+        neq=0,
+        eps=1e-4,
+        Q=None,
+        q=None,
+        A=None,
+        b=None,
+        G=None,
+        h=None,
+    ):
         """
         Initialization of the OneLayerOptNet class.
 

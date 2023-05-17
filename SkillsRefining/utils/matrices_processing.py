@@ -73,13 +73,15 @@ def assign_matrix(mask, target, rind, cind):
     :return:
     """
     if mask.shape[-1] != len(cind) or mask.shape[-2] != len(rind):
-        raise ValueError('The index size does not correspond to the row or column size of the mask')
+        raise ValueError(
+            "The index size does not correspond to the row or column size of the mask"
+        )
 
     r = 0
     c = 0
     for i in range(len(rind)):
         for j in range(len(cind)):
-            target[:, rind[i], cind[j]] = mask[:, r,c]
+            target[:, rind[i], cind[j]] = mask[:, r, c]
             c += 1
 
         r += 1

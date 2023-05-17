@@ -5,7 +5,7 @@ from pathlib import Path
 cwd_path = Path(__file__).absolute().parents[0]
 parent_path = cwd_path.parents[0]
 sys.path.insert(0, parent_path.as_posix())
-sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix()) # Root
+sys.path.insert(0, cwd_path.parents[0].parents[0].as_posix())  # Root
 
 import numpy as np
 from scipy.io import loadmat  # loading data from matlab
@@ -13,21 +13,30 @@ from mayavi import mlab
 import matplotlib.pyplot as plt
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
-from SkillsRefining.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
-from SkillsRefining.skills.mps.gmr.manifold_clustering import manifold_k_means, manifold_gmm_em
+from SkillsRefining.skills.mps.gmr.manifold_statistics import (
+    compute_frechet_mean,
+    compute_weighted_frechet_mean,
+)
+from SkillsRefining.skills.mps.gmr.manifold_clustering import (
+    manifold_k_means,
+    manifold_gmm_em,
+)
 from SkillsRefining.skills.mps.gmr.manifold_gmr import manifold_gmr
-from SkillsRefining.utils.plot_sphere_mayavi import plot_sphere, plot_gaussian_mesh_on_tangent_plane
+from SkillsRefining.utils.plot_sphere_mayavi import (
+    plot_sphere,
+    plot_gaussian_mesh_on_tangent_plane,
+)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     np.random.seed(123445)
 
     # Load data
-    letter = 'C'
-    exp_dir = './examples/MovementPrimitives/'
-    datapath = '2Dletters/'
-    data = loadmat(exp_dir + datapath + '%s.mat' % letter)
-    demos = [d['pos'][0][0].T for d in data['demos'][0]]
+    letter = "C"
+    exp_dir = "./examples/MovementPrimitives/"
+    datapath = "2Dletters/"
+    data = loadmat(exp_dir + datapath + "%s.mat" % letter)
+    demos = [d["pos"][0][0].T for d in data["demos"][0]]
 
     # Parameters
     nb_data = demos[0].shape[0]
@@ -61,7 +70,7 @@ if __name__ == '__main__':
 
     # Data in format compatible with pymanopt product of manifolds
     data = []
-    for n in range(nb_data*nb_samples):
+    for n in range(nb_data * nb_samples):
         data.append([X[n], Y[n]])
     data = np.array(data)
     # data = demos_np
@@ -78,33 +87,47 @@ if __name__ == '__main__':
     nb_clusters = 3
 
     # If model is saved, load it
-    filename = exp_dir + '/gmm_sphere.npz'
+    filename = exp_dir + "/gmm_sphere.npz"
     if os.path.isfile(filename) and False:
         gmm = np.load(filename)
         gmm.allow_pickle = True
-        gmm_means = np.array(gmm['gmm_means'])
-        gmm_covariances = np.array(gmm['gmm_covariances'])
-        gmm_priors = np.array(gmm['gmm_priors'])
+        gmm_means = np.array(gmm["gmm_means"])
+        gmm_covariances = np.array(gmm["gmm_covariances"])
+        gmm_priors = np.array(gmm["gmm_priors"])
 
     # Otherwise train GMM
     else:
         # K-means
-        km_means, km_assignments = manifold_k_means(manifold, data, nb_clusters=nb_clusters)
+        km_means, km_assignments = manifold_k_means(
+            manifold, data, nb_clusters=nb_clusters
+        )
 
         # GMM
-        initial_covariances = np.concatenate(nb_clusters * [np.eye(input_dim+output_dim)[None]], 0)
+        initial_covariances = np.concatenate(
+            nb_clusters * [np.eye(input_dim + output_dim)[None]], 0
+        )
         initial_priors = np.zeros(nb_clusters)
         for k in range(nb_clusters):
             initial_priors[k] = np.sum(km_assignments == k) / nb_data
-        gmm_means, gmm_covariances, gmm_priors, gmm_assignments = manifold_gmm_em(manifold, data, nb_clusters,
-                                                                                  initial_means=km_means,
-                                                                                  initial_covariances=initial_covariances,
-                                                                                  initial_priors=initial_priors
-                                                                                  )
-        np.savez(filename, gmm_means=gmm_means, gmm_covariances=gmm_covariances, gmm_priors=gmm_priors)
+        gmm_means, gmm_covariances, gmm_priors, gmm_assignments = manifold_gmm_em(
+            manifold,
+            data,
+            nb_clusters,
+            initial_means=km_means,
+            initial_covariances=initial_covariances,
+            initial_priors=initial_priors,
+        )
+        np.savez(
+            filename,
+            gmm_means=gmm_means,
+            gmm_covariances=gmm_covariances,
+            gmm_priors=gmm_priors,
+        )
 
     # GMR
-    mu_gmr, sigma_gmr, H = manifold_gmr(Xt, manifold, gmm_means, gmm_covariances, gmm_priors)
+    mu_gmr, sigma_gmr, H = manifold_gmr(
+        Xt, manifold, gmm_means, gmm_covariances, gmm_priors
+    )
 
     # Plots
     # Plot sphere
@@ -114,11 +137,13 @@ if __name__ == '__main__':
     plot_sphere(figure=fig)
     # Plot data on the sphere
     for p in range(nb_samples):
-        mlab.points3d(Y[p * nb_data:(p + 1) * nb_data, 0],
-                      Y[p * nb_data:(p + 1) * nb_data, 1],
-                      Y[p * nb_data:(p + 1) * nb_data, 2],
-                      color=(0., 0., 0.),
-                      scale_factor=0.03)
+        mlab.points3d(
+            Y[p * nb_data : (p + 1) * nb_data, 0],
+            Y[p * nb_data : (p + 1) * nb_data, 1],
+            Y[p * nb_data : (p + 1) * nb_data, 2],
+            color=(0.0, 0.0, 0.0),
+            scale_factor=0.03,
+        )
 
     # # Plot Gaussians
     # for k in range(nb_clusters):
@@ -138,47 +163,59 @@ if __name__ == '__main__':
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
-        plt.plot(Xt[:nb_data, 0], Y[p * nb_data:(p + 1) * nb_data, 0], color=[.7, .7, .7])
+        plt.plot(
+            Xt[:nb_data, 0],
+            Y[p * nb_data : (p + 1) * nb_data, 0],
+            color=[0.7, 0.7, 0.7],
+        )
     plt.plot(Xt[:, 0], mu_gmr[:, 0], color=[0.20, 0.54, 0.93], linewidth=3)
     miny = mu_gmr[:, 0] - np.sqrt(sigma_gmr[:, 0, 0])
     maxy = mu_gmr[:, 0] + np.sqrt(sigma_gmr[:, 0, 0])
     plt.fill_between(Xt[:, 0], miny, maxy, color=[0.20, 0.54, 0.93], alpha=0.3)
     axes = plt.gca()
     axes.set_ylim([-1.1, 1.1])
-    plt.xlabel('$t$', fontsize=30)
-    plt.ylabel('$y_1$', fontsize=30)
+    plt.xlabel("$t$", fontsize=30)
+    plt.ylabel("$y_1$", fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
-    plt.savefig(exp_dir + 'Figure1.png', dpi=100)
+    plt.savefig(exp_dir + "Figure1.png", dpi=100)
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
-        plt.plot(Xt[:nb_data, 0], Y[p * nb_data:(p + 1) * nb_data, 1], color=[.7, .7, .7])
+        plt.plot(
+            Xt[:nb_data, 0],
+            Y[p * nb_data : (p + 1) * nb_data, 1],
+            color=[0.7, 0.7, 0.7],
+        )
     plt.plot(Xt[:, 0], mu_gmr[:, 1], color=[0.20, 0.54, 0.93], linewidth=3)
     miny = mu_gmr[:, 1] - np.sqrt(sigma_gmr[:, 1, 1])
     maxy = mu_gmr[:, 1] + np.sqrt(sigma_gmr[:, 1, 1])
     plt.fill_between(Xt[:, 0], miny, maxy, color=[0.20, 0.54, 0.93], alpha=0.3)
     axes = plt.gca()
     axes.set_ylim([-1.1, 1.1])
-    plt.xlabel('$t$', fontsize=30)
-    plt.ylabel('$y_2$', fontsize=30)
+    plt.xlabel("$t$", fontsize=30)
+    plt.ylabel("$y_2$", fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
-    plt.savefig(exp_dir + 'Figure2.png', dpi=100)
+    plt.savefig(exp_dir + "Figure2.png", dpi=100)
     # plt.show()
 
     plt.figure(figsize=(5, 4))
     for p in range(nb_samples):
-        plt.plot(Xt[:nb_data, 0], Y[p * nb_data:(p + 1) * nb_data, 2], color=[.7, .7, .7])
+        plt.plot(
+            Xt[:nb_data, 0],
+            Y[p * nb_data : (p + 1) * nb_data, 2],
+            color=[0.7, 0.7, 0.7],
+        )
     plt.plot(Xt[:, 0], mu_gmr[:, 2], color=[0.20, 0.54, 0.93], linewidth=3)
     miny = mu_gmr[:, 2] - np.sqrt(sigma_gmr[:, 2, 2])
     maxy = mu_gmr[:, 2] + np.sqrt(sigma_gmr[:, 2, 2])
     plt.fill_between(Xt[:, 0], miny, maxy, color=[0.20, 0.54, 0.93], alpha=0.3)
     axes = plt.gca()
     axes.set_ylim([-1.1, 1.1])
-    plt.xlabel('$t$', fontsize=30)
-    plt.ylabel('$y_3$', fontsize=30)
+    plt.xlabel("$t$", fontsize=30)
+    plt.ylabel("$y_3$", fontsize=30)
     plt.tick_params(labelsize=20)
     plt.tight_layout()
-    plt.savefig(exp_dir + 'Figure3.png', dpi=100)
+    plt.savefig(exp_dir + "Figure3.png", dpi=100)
     # plt.show()

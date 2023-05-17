@@ -67,7 +67,7 @@ class TaskDemoEvaluator(object):
             # pdb.set_trace()
             # self.logger.info(f'Simulating with DS')
             if record:
-                self.logger.info(f"Recording Robot Camera Obs")
+                self.logger.info("Recording Robot Camera Obs")
                 self.env.record_frame()
             for step in range(len(xi.squeeze())):
                 new_x = xi.squeeze()[step, :]
@@ -92,7 +92,7 @@ class TaskDemoEvaluator(object):
                 status = "Fail"
             self.logger.info(f"{idx+1}: {status}!")
             if record:
-                self.logger.info(f"Saving Robot Camera Obs")
+                self.logger.info("Saving Robot Camera Obs")
                 video_path = self.env.save_recorded_frames(
                     self.cfg.exp_dir, f"{status}"
                 )

@@ -33,7 +33,6 @@ class BaseDataset(Dataset):
             self.transform_robot_obs = get_transforms(self.transforms.robot_obs)
 
     def __getitem__(self, idx: Union[int, Tuple[int, int]]) -> Dict:
-
         """
         Get sequence of datamodule.
         Args:

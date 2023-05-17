@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from SkillsRefining.utils.utils import prepare_torch
+
 device = prepare_torch()
 
 
@@ -9,6 +10,7 @@ class Constraint(nn.Module):
     """
     Instances of this class define constraints for an OptNet layer.
     """
+
     def __init__(self):
         super(Constraint, self).__init__()
         self.set_trainable(False)
@@ -42,6 +44,7 @@ class EqnConstraint(Constraint):
     """
     Instances of this class define equality constraints for an OptNet layer. Constraints are of the type Ax = b.
     """
+
     def __init__(self, A=None, b=None):
         """
         Initialization of the EqnConstraint class.
@@ -61,7 +64,7 @@ class EqnConstraint(Constraint):
         self.set_trainable(False)
 
     def print(self):
-        print('A is {}, b is {}'.format(self.A.cpu().numpy(), self.b.cpu().numpy()))
+        print("A is {}, b is {}".format(self.A.cpu().numpy(), self.b.cpu().numpy()))
 
     def update(self, q):
         pass
@@ -71,6 +74,7 @@ class IneqnConstraint(Constraint):
     """
     Instances of this class define inequality constraints for an OptNet layer. Constraints are of the type Gx <= h.
     """
+
     def __init__(self, dim, G=None, h=None):
         """
         Initialization of the IneqnConstraint class.
@@ -85,7 +89,7 @@ class IneqnConstraint(Constraint):
         if G is None or h is None:
             # TODO: solve: QPFunction bugs when a zero-dimensional G is given (line 87 of qpth/qp.py)
             # TODO: for now we give one always-valid constraint Gx <= h, where G=0 and h=0
-            G = torch.from_numpy(np.array([[0]*dim])).double()
+            G = torch.from_numpy(np.array([[0] * dim])).double()
             h = torch.from_numpy(np.array([[0]])).double()
             # G = torch.autograd.Variable(torch.Tensor())
             # h = torch.autograd.Variable(torch.Tensor())
@@ -96,7 +100,7 @@ class IneqnConstraint(Constraint):
         self.set_trainable(False)
 
     def print(self):
-        print('G is {}, h is {}'.format(self.G.cpu().numpy(), self.h.cpu().numpy()))
+        print("G is {}, h is {}".format(self.G.cpu().numpy(), self.h.cpu().numpy()))
 
     def update(self, q):
         pass
@@ -106,6 +110,7 @@ class ListEqnConstraints(Constraint):
     """
     Instances of this class combines a list of equality constraints for an OptNet layer into one constraint Ax = b.
     """
+
     def __init__(self, eq_constraints_list):
         """
         Initialization of the ListEqnConstraints class.
@@ -128,13 +133,14 @@ class ListEqnConstraints(Constraint):
             self.b = torch.cat([self.b, self.eq_constraints_list[n].b], dim=0)
 
     def print(self):
-        print('A is {}, b is {}'.format(self.A.cpu().numpy(), self.b.cpu().numpy()))
+        print("A is {}, b is {}".format(self.A.cpu().numpy(), self.b.cpu().numpy()))
 
 
 class ListIneqnConstraints(Constraint):
     """
     Instances of this class combines a list of inequality constraints for an OptNet layer into one constraint Gx <= h.
     """
+
     def __init__(self, ineq_constraints_list):
         """
         Initialization of the ListIneqnConstraints class.
@@ -180,14 +186,15 @@ class ListIneqnConstraints(Constraint):
         self.h = h.to(device)
 
     def print(self):
-        print('G is {}, h is {}'.format(self.G.cpu().numpy(), self.h.cpu().numpy()))
+        print("G is {}, h is {}".format(self.G.cpu().numpy(), self.h.cpu().numpy()))
 
 
 class JointAngleLimitsConstraint(IneqnConstraint):
     """
     Instances of this class defines joint angles inequality constraints for an OptNet layer.
     """
-    def __init__(self, dim, angle_max=np.pi-0.2, angle_min=-np.pi+0.2, dt=0.01):
+
+    def __init__(self, dim, angle_max=np.pi - 0.2, angle_min=-np.pi + 0.2, dt=0.01):
         """
         Initialization of the JointAngleLimitsConstraint class.
 
@@ -235,8 +242,16 @@ class JointAngleLimitsConstraint(IneqnConstraint):
         batch_size = q.shape[0]
         dim = q.shape[-1]
 
-        h_max = (self.angle_max - q) / self.dt * torch.ones(size=(batch_size, dim)).to(device)
-        h_min = (q - self.angle_min) / self.dt * torch.ones(size=(batch_size, dim)).to(device)
+        h_max = (
+            (self.angle_max - q)
+            / self.dt
+            * torch.ones(size=(batch_size, dim)).to(device)
+        )
+        h_min = (
+            (q - self.angle_min)
+            / self.dt
+            * torch.ones(size=(batch_size, dim)).to(device)
+        )
 
         self.h = torch.cat([h_max, h_min], dim=1)
         self.G = self.G.to(device)
@@ -247,6 +262,7 @@ class JointVelocityLimitsConstraint(IneqnConstraint):
     """
     Instances of this class defines joint velocity inequality constraints for an OptNet layer.
     """
+
     def __init__(self, dim, velocity_max=10, velocity_min=-10, dt=0.01):
         """
         Initialization of the JointVelocityLimitsConstraint class.
@@ -283,8 +299,12 @@ class JointVelocityLimitsConstraint(IneqnConstraint):
         batch_size = q.shape[0]
         dim = q.shape[-1]
 
-        h_max = self.velocity_max / self.dt * torch.ones(size=(batch_size, dim)).to(device)
-        h_min = -self.velocity_min / self.dt * torch.ones(size=(batch_size, dim)).to(device)
+        h_max = (
+            self.velocity_max / self.dt * torch.ones(size=(batch_size, dim)).to(device)
+        )
+        h_min = (
+            -self.velocity_min / self.dt * torch.ones(size=(batch_size, dim)).to(device)
+        )
 
         self.h = torch.cat([h_max, h_min], dim=1)
         self.G = self.G.to(device)
@@ -297,6 +317,7 @@ class TaskSpaceVariableConstraint(EqnConstraint):
     several skills influence the same task variable, therefore the components of the output of the QP corresponding to
     the same task variable have to be equal.
     """
+
     def __init__(self, skill_list, ctrl_idx):
         """
         Initialization of the TaskSpaceVariableConstraint class.
@@ -313,7 +334,7 @@ class TaskSpaceVariableConstraint(EqnConstraint):
         # Skills dimensions
         self.skills_dim = np.zeros(self.nb_skills + 1, int)
         for i in range(0, self.nb_skills):
-            self.skills_dim[i+1] = self.skill_list[i].dim()
+            self.skills_dim[i + 1] = self.skill_list[i].dim()
         skills_dim_cumsum = np.cumsum(self.skills_dim)
 
         # Create constraints matrix
@@ -321,15 +342,19 @@ class TaskSpaceVariableConstraint(EqnConstraint):
         head = []
         tail = []
         for i in range(self.nb_skills):
-            for j in range(i+1, self.nb_skills):
+            for j in range(i + 1, self.nb_skills):
                 # If two skills are from the same type, the output of the QP for these skills has to be the same task
                 # variable, i.e., x_i - x_j = 0, equivalently [I 0; 0 -I] * [x_i x_j] = 0
                 if ctrl_idx[i] == ctrl_idx[j] and i not in head and j not in tail:
                     head.append(i)
                     tail.append(j)
                     a = np.zeros((skill_list[i].dim(), skills_dim_cumsum[-1]))
-                    a[:, skills_dim_cumsum[i]:skills_dim_cumsum[i + 1]] = np.eye(skill_list[i].dim())
-                    a[:, skills_dim_cumsum[j]:skills_dim_cumsum[j + 1]] = -np.eye(skill_list[j].dim())
+                    a[:, skills_dim_cumsum[i] : skills_dim_cumsum[i + 1]] = np.eye(
+                        skill_list[i].dim()
+                    )
+                    a[:, skills_dim_cumsum[j] : skills_dim_cumsum[j + 1]] = -np.eye(
+                        skill_list[j].dim()
+                    )
                     A_rows.append(a)
 
         if len(A_rows) != 0:
@@ -358,5 +383,3 @@ class TaskSpaceVariableConstraint(EqnConstraint):
         dim = self.A.shape[0]
 
         self.b = torch.zeros(size=(batch_size, dim)).to(device)
-
-

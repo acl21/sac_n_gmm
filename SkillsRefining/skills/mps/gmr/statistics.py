@@ -16,10 +16,14 @@ def multivariate_normal(x, mu, sigma=None, log=True, inv_sigma=None):
         sigma = sigma[:, None]
         dx = dx[:, None]
         inv_sigma = np.linalg.inv(sigma) if inv_sigma is None else inv_sigma
-        log_lik = -0.5 * np.sum(np.dot(dx, inv_sigma) * dx, axis=1) - 0.5 * np.log(np.linalg.det(2 * np.pi * sigma))
+        log_lik = -0.5 * np.sum(np.dot(dx, inv_sigma) * dx, axis=1) - 0.5 * np.log(
+            np.linalg.det(2 * np.pi * sigma)
+        )
     else:
         inv_sigma = np.linalg.inv(sigma) if inv_sigma is None else inv_sigma
-        log_lik = -0.5 * np.einsum('...j,...j', dx, np.einsum('...jk,...j->...k', inv_sigma, dx)) - 0.5 * np.log(np.linalg.det(2 * np.pi * sigma))
+        log_lik = -0.5 * np.einsum(
+            "...j,...j", dx, np.einsum("...jk,...j->...k", inv_sigma, dx)
+        ) - 0.5 * np.log(np.linalg.det(2 * np.pi * sigma))
 
     return log_lik if log else np.exp(log_lik)
 
@@ -33,4 +37,3 @@ def pca(centered_data, nb_components):
     eigenvecs = np.real(eigenvecs[:, idx])
 
     return eigenvecs[:, :nb_components], eigenvals[:nb_components]
-

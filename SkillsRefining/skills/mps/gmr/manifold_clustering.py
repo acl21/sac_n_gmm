@@ -3,7 +3,10 @@ import numpy as np
 from pymanopt.manifolds import Product
 
 from SkillsRefining.skills.mps.gmr.statistics import multivariate_normal
-from SkillsRefining.skills.mps.gmr.manifold_statistics import compute_frechet_mean, compute_weighted_frechet_mean
+from SkillsRefining.skills.mps.gmr.manifold_statistics import (
+    compute_frechet_mean,
+    compute_weighted_frechet_mean,
+)
 
 
 def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_max=100):
@@ -12,7 +15,7 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
     if initial_means is None:
         initial_means = []
         for k in range(nb_clusters):
-            initial_means.append(data[np.random.randint(0, nb_data-1)])
+            initial_means.append(data[np.random.randint(0, nb_data - 1)])
         initial_means = np.array(initial_means)
 
     # Lloyds algorithm
@@ -21,7 +24,10 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
     previous_assignments = np.ones(nb_data)
     nb_iter = 0
 
-    while np.sum(np.abs((cluster_assignments - previous_assignments))) > 0 and nb_iter < nb_iter_max:
+    while (
+        np.sum(np.abs((cluster_assignments - previous_assignments))) > 0
+        and nb_iter < nb_iter_max
+    ):
         previous_assignments = cluster_assignments
 
         # Compute distances to means
@@ -35,7 +41,9 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
 
         # Update the means
         for k in range(nb_clusters):
-            cluster_means[k] = compute_frechet_mean(manifold, data[cluster_assignments == k])
+            cluster_means[k] = compute_frechet_mean(
+                manifold, data[cluster_assignments == k]
+            )
 
         # Update number of iterations
         nb_iter += 1
@@ -43,8 +51,18 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
     return cluster_means, cluster_assignments
 
 
-def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covariances=None, initial_priors=None,
-                    nb_iter_max=200, max_diff_ll=1e-5, regularization_factor=1e-10, logger=None):
+def manifold_gmm_em(
+    manifold,
+    data,
+    nb_states,
+    initial_means=None,
+    initial_covariances=None,
+    initial_priors=None,
+    nb_iter_max=200,
+    max_diff_ll=1e-5,
+    regularization_factor=1e-10,
+    logger=None,
+):
     """
     EM algorithm for a GMM on a Riemannian manifold
 
@@ -97,7 +115,9 @@ def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covar
                 xts_k = np.concatenate(np.concatenate(xts[k])).reshape(nb_data, -1)
             else:
                 xts_k = xts[k]
-            L_log[:, k] = np.log(priors[k]) + multivariate_normal(xts_k, np.zeros_like(xts_k), covariances[k], log=True)
+            L_log[:, k] = np.log(priors[k]) + multivariate_normal(
+                xts_k, np.zeros_like(xts_k), covariances[k], log=True
+            )
 
         L = np.exp(L_log)
         GAMMA = L / np.sum(L, axis=1)[:, None]
@@ -117,7 +137,10 @@ def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covar
                 xts_k = xts[k]
 
             # Update covariances
-            covariances[k] = np.dot(xts_k.T, np.dot(np.diag(GAMMA2[:, k]), xts_k)) + np.eye(xts_k.shape[1]) * regularization_factor
+            covariances[k] = (
+                np.dot(xts_k.T, np.dot(np.diag(GAMMA2[:, k]), xts_k))
+                + np.eye(xts_k.shape[1]) * regularization_factor
+            )
 
         # Update priors
         priors = np.mean(GAMMA, axis=0)
@@ -127,21 +150,27 @@ def manifold_gmm_em(manifold, data, nb_states, initial_means=None, initial_covar
         # Check for convergence
         if it > nb_min_steps:
             if LL[it] - LL[it - 1] < max_diff_ll:
-                if logger == None:
-                    print('Converged after %d iterations: %.3e' % (it, LL[it]))
+                if logger is None:
+                    print("Converged after %d iterations: %.3e" % (it, LL[it]))
                 else:
-                    logger.info('Converged after %d iterations: %.3e' % (it, LL[it]))
+                    logger.info("Converged after %d iterations: %.3e" % (it, LL[it]))
 
                 return means, covariances, priors, GAMMA
 
-    if logger == None:
-        print(f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations.")
+    if logger is None:
+        print(
+            f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
+        )
     else:
-        logger.info(f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations.")
+        logger.info(
+            f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
+        )
     return means, covariances, priors, GAMMA
 
 
-def compute_gmm_density(manifold, data, nb_states, means, covariances, priors, log=False):
+def compute_gmm_density(
+    manifold, data, nb_states, means, covariances, priors, log=False
+):
     """
     Computation of the density for a GMM on a Riemannian manifold.
 
@@ -172,8 +201,9 @@ def compute_gmm_density(manifold, data, nb_states, means, covariances, priors, l
 
     states_likelihood = np.zeros((nb_data, nb_states))
     for k in range(nb_states):
-        states_likelihood[:, k] = priors[k] * multivariate_normal(xts[k], np.zeros_like(means[k]), covariances[k],
-                                                                  log=False)
+        states_likelihood[:, k] = priors[k] * multivariate_normal(
+            xts[k], np.zeros_like(means[k]), covariances[k], log=False
+        )
 
     likelihood = np.sum(states_likelihood, axis=1)
 

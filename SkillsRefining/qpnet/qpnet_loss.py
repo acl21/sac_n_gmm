@@ -1,10 +1,10 @@
-import numpy as np
 import torch
 import torch.nn as nn
 from SkillsRefining.utils.matrices_processing import fill_diag
 from torch import Tensor
 
 from SkillsRefining.utils.utils import prepare_torch
+
 device = prepare_torch()
 
 
@@ -13,14 +13,20 @@ class MultipleSkillsVelocityKktLoss(nn.Module):
     Instances of this class define a loss function based on the KKT optimality conditions of a QP optimization.
     Namely the loss is equal to the norm of the weighted errors, where the weight matrix is given by the QP.
     """
+
     def __init__(self):
         """
         Initialization of the MultipleSkillsVelocityKktLoss class.
         """
         super().__init__()
 
-    def forward(self, input_velocity: Tensor, target_velocity: Tensor, qp_weight_matrix: Tensor,
-                constant_skill_weight=None) -> Tensor:
+    def forward(
+        self,
+        input_velocity: Tensor,
+        target_velocity: Tensor,
+        qp_weight_matrix: Tensor,
+        constant_skill_weight=None,
+    ) -> Tensor:
         """
         This function computes the loss function.
 
@@ -49,8 +55,15 @@ class MultipleSkillsVelocityKktLoss(nn.Module):
 
         artificial_weight_matrix = artificial_weight_matrix.to(device)
         error = (input_velocity - target_velocity)[:, :, None]
-        
-        loss = torch.mean(torch.norm(torch.matmul(torch.matmul(artificial_weight_matrix, qp_weight_matrix),
-                                                 torch.matmul(artificial_weight_matrix, error)), dim=1))
+
+        loss = torch.mean(
+            torch.norm(
+                torch.matmul(
+                    torch.matmul(artificial_weight_matrix, qp_weight_matrix),
+                    torch.matmul(artificial_weight_matrix, error),
+                ),
+                dim=1,
+            )
+        )
 
         return loss

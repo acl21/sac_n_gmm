@@ -5,47 +5,67 @@ from pymanopt.manifolds import Euclidean, Product
 from SkillsRefining.skills.mps.gmr.manifold_gmr import manifold_gmr
 from SkillsRefining.skills.mps.dynsys.CALVIN_DS import CALVINDynSysDataset
 
+
 class CALVINSkill:
     """
     This class handles all functions related to CALVIN skills
     """
-    def __init__(self, skill_name, skill_id, demos_dir=None,  skills_dir=None, ):
+
+    def __init__(
+        self,
+        skill_name,
+        skill_id,
+        demos_dir=None,
+        skills_dir=None,
+    ):
         self.skill_name = skill_name
         self.skills_dir = skills_dir
         self.demos_dir = demos_dir
         self.dim_ = 3
-        self.state_idx = [i for i in range(skill_id*self.dim_, (skill_id+1)*self.dim_)]
+        self.state_idx = [
+            i for i in range(skill_id * self.dim_, (skill_id + 1) * self.dim_)
+        ]
         self.orignal_state_idx = self.state_idx
-        self.logger = logging.getLogger(f'CALVINSkill-{self.skill_name}')
+        self.logger = logging.getLogger(f"CALVINSkill-{self.skill_name}")
         self.means = None
         self.covariances = None
         self.priors = None
         self.load_skill_ds_params()
         self.manifold = Product([Euclidean(self.dim_), Euclidean(self.dim_)])
-        self.dataset = CALVINDynSysDataset(skill=skill_name, train=True, state_type='pos',
-                                           goal_centered=False, normalized=False,
-                                           demos_dir=demos_dir)
+        self.dataset = CALVINDynSysDataset(
+            skill=skill_name,
+            train=True,
+            state_type="pos",
+            goal_centered=False,
+            normalized=False,
+            demos_dir=demos_dir,
+        )
         self.goal = self.dataset.goal
         self.desired_value = None
 
     def load_skill_ds_params(self):
-        skill_file = os.path.join(self.skills_dir, 'pos', self.skill_name, 'gmm', 'gmm_params.npz')
+        skill_file = os.path.join(
+            self.skills_dir, "pos", self.skill_name, "gmm", "gmm_params.npz"
+        )
 
         if not os.path.exists(skill_file):
-            raise FileNotFoundError(f'Skill GMM Params not found at {skill_file}')
-        else: 
-            self.logger.info(f'Loading GMM params from {skill_file}')
+            raise FileNotFoundError(f"Skill GMM Params not found at {skill_file}")
+        else:
+            self.logger.info(f"Loading GMM params from {skill_file}")
         gmm = np.load(skill_file)
         gmm.allow_pickle = True
-        self.means = np.array(gmm['gmm_means'])
-        self.covariances = np.array(gmm['gmm_covariances'])
-        self.priors = np.array(gmm['gmm_priors'])
-
+        self.means = np.array(gmm["gmm_means"])
+        self.covariances = np.array(gmm["gmm_covariances"])
+        self.priors = np.array(gmm["gmm_priors"])
 
     def predict_dx(self, x):
-        dx, _, __ = manifold_gmr((x-self.goal).reshape(1, -1),
-                                 self.manifold, self.means, 
-                                 self.covariances, self.priors)
+        dx, _, __ = manifold_gmr(
+            (x - self.goal).reshape(1, -1),
+            self.manifold,
+            self.means,
+            self.covariances,
+            self.priors,
+        )
         return dx[0]
 
     def update_desired_value(self, desired_value, use_state_idx=False):
@@ -67,7 +87,7 @@ class CALVINSkill:
             else:
                 x = x[:, self.orignal_state_idx]
 
-        return self.desired_value[:, :self.dim_] - x[:, :self.dim_]
+        return self.desired_value[:, : self.dim_] - x[:, : self.dim_]
 
     def dim(self):
         return self.dim_
@@ -78,6 +98,7 @@ class CALVINSkillComplex:
     This class encodes a set of skills and allows the computation of the error including all skills in
     combined matrices.
     """
+
     def __init__(self, state_dim, config_dim, skills, skill_cluster_idx=None):
         """
         Initialization of the class
@@ -98,7 +119,10 @@ class CALVINSkillComplex:
         self.total_dim = total_dim
 
     def update_desired_value(self, desired_value, use_state_idx=True):
-        [skill.update_desired_value(desired_value, use_state_idx) for skill in self.skills]
+        [
+            skill.update_desired_value(desired_value, use_state_idx)
+            for skill in self.skills
+        ]
 
     def error(self, state, use_state_idx=True):
         err = [skill.error(state, use_state_idx) for skill in self.skills]

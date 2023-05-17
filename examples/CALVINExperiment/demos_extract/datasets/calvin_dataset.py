@@ -10,8 +10,6 @@ from datasets.utils.load_utils import load_npz
 
 logger = logging.getLogger(__name__)
 
-import pdb
-
 
 class CalvinDataset(BaseDataset):
     def __init__(self, *args, **kwargs):
@@ -30,7 +28,6 @@ class CalvinDataset(BaseDataset):
         return self.num_demos
 
     def __getitem__(self, idx: Union[int, Tuple[int, int]]) -> Dict:
-
         return self.get_sequences(idx)
 
     def lookup_naming_pattern(self):
@@ -50,7 +47,9 @@ class CalvinDataset(BaseDataset):
         """
         Convert frame idx to file name
         """
-        return Path(f"{self.naming_pattern[0]}{idx:0{self.n_digits}d}{self.naming_pattern[1]}")
+        return Path(
+            f"{self.naming_pattern[0]}{idx:0{self.n_digits}d}{self.naming_pattern[1]}"
+        )
 
     def zip_sequence(self, start_idx: int, end_idx: int) -> Dict[str, np.ndarray]:
         """
@@ -63,8 +62,14 @@ class CalvinDataset(BaseDataset):
         -----------
         episode: dict of numpy arrays containing the episode where keys are the names of modalities
         """
-        episodes = [load_npz(self.get_episode_name(file_idx)) for file_idx in range(start_idx, end_idx, self.step_len)]
-        episode = {key: np.stack([ep[key] for ep in episodes]) for key, _ in episodes[0].items()}
+        episodes = [
+            load_npz(self.get_episode_name(file_idx))
+            for file_idx in range(start_idx, end_idx, self.step_len)
+        ]
+        episode = {
+            key: np.stack([ep[key] for ep in episodes])
+            for key, _ in episodes[0].items()
+        }
         return episode
 
     def get_sequences(self, idx: int) -> Dict:
@@ -110,12 +115,21 @@ class CalvinDataset(BaseDataset):
         file_name = data_dir / "lang_annotations" / "auto_lang_ann.npy"
         data = np.load(file_name, allow_pickle=True).reshape(-1)[0]
 
-        all_eps_idx_part_task = [i for (i, v) in enumerate(data["language"]["task"]) if v == skill_name]
-        all_eps_start_end_part_task = [data["info"]["indx"][i] for i in all_eps_idx_part_task]
+        all_eps_idx_part_task = [
+            i for (i, v) in enumerate(data["language"]["task"]) if v == skill_name
+        ]
+        all_eps_start_end_part_task = [
+            data["info"]["indx"][i] for i in all_eps_idx_part_task
+        ]
 
         for i in range(len(all_eps_start_end_part_task)):
-            if all_eps_start_end_part_task[i][1] - all_eps_start_end_part_task[i][0] == 64:
+            if (
+                all_eps_start_end_part_task[i][1] - all_eps_start_end_part_task[i][0]
+                == 64
+            ):
                 episode_lookup.append(all_eps_start_end_part_task[i])
 
-        logger.info(f"Found {len(episode_lookup)} demonstrations of skill {skill_name}.")
+        logger.info(
+            f"Found {len(episode_lookup)} demonstrations of skill {skill_name}."
+        )
         return episode_lookup

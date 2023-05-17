@@ -1,0 +1,27 @@
+[flake8]
+exclude =
+       .git,
+       examples/CALVINExperiment/calvin_env,
+       examples/GripperExperiment,
+       examples/MovementPrimitives
+# Default is 79 in PEP 8
+max-line-length = 120
+select = E,F,W,C
+ignore = 
+       # line break before binary operator, need for black
+       W503,
+       # whitespace before ':'. Opposite convention enforced by black
+       E203,
+       # do not assign a lambda expression, use a def
+       E731,
+       E722,
+       F401,
+       F841,
+       # module level import not at top of file
+       E402,
+       # ambiguous variable name
+       E741,
+       # line too long. Handled by black
+       E501,
+       # Unnecessary list literal - rewrite as a dict literal
+       C406,

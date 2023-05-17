@@ -4,14 +4,15 @@ import torch
 
 class ReplayBuffer(object):
     """Buffer to store environment transitions."""
+
     def __init__(self, obs_shape, action_shape, capacity, device):
         self.capacity = capacity
         self.device = device
 
         if isinstance(obs_shape, int):
-            obs_shape = (obs_shape, )
+            obs_shape = (obs_shape,)
         if isinstance(action_shape, int):
-            action_shape = (action_shape, )
+            action_shape = (action_shape,)
 
         # the proprioceptive obs is stored as float32, pixels obs as uint8
         obs_dtype = np.float32 if len(obs_shape) == 1 else np.uint8
@@ -42,17 +43,17 @@ class ReplayBuffer(object):
         self.full = self.full or self.idx == 0
 
     def sample(self, batch_size):
-        idxs = np.random.randint(0,
-                                 self.capacity if self.full else self.idx,
-                                 size=batch_size)
+        idxs = np.random.randint(
+            0, self.capacity if self.full else self.idx, size=batch_size
+        )
 
         obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
-        next_obses = torch.as_tensor(self.next_obses[idxs],
-                                     device=self.device).float()
+        next_obses = torch.as_tensor(self.next_obses[idxs], device=self.device).float()
         not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
-        not_dones_no_max = torch.as_tensor(self.not_dones_no_max[idxs],
-                                           device=self.device)
+        not_dones_no_max = torch.as_tensor(
+            self.not_dones_no_max[idxs], device=self.device
+        )
 
         return obses, actions, rewards, next_obses, not_dones, not_dones_no_max

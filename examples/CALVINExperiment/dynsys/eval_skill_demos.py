@@ -71,7 +71,7 @@ class SkillEvaluatorDemos(object):
                     break
             # self.logger.info(f'Simulating with Data')
             if record:
-                self.logger.info(f"Recording Robot Camera Obs")
+                self.logger.info("Recording Robot Camera Obs")
                 self.env.record_frame()
             for step in range(1, len(xi.squeeze())):
                 # delta_x = sampling_dt * d_xi.squeeze()[step, :].numpy()
@@ -100,7 +100,7 @@ class SkillEvaluatorDemos(object):
                 status = "Fail"
             self.logger.info(f"{idx+1}: {status}!")
             if record:
-                self.logger.info(f"Saving Robot Camera Obs")
+                self.logger.info("Saving Robot Camera Obs")
                 video_path = self.env.save_recorded_frames()
                 self.env.reset_recorded_frames()
                 status = None

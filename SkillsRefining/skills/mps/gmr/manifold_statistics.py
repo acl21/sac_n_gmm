@@ -22,7 +22,9 @@ def compute_frechet_mean(manifold, data, nb_iter_max=10, convergence_threshold=1
     return mean
 
 
-def compute_weighted_frechet_mean(manifold, data, weights, nb_iter_max=10, convergence_threshold=1e-6):
+def compute_weighted_frechet_mean(
+    manifold, data, weights, nb_iter_max=10, convergence_threshold=1e-6
+):
     nb_data = data.shape[0]
 
     # Initialize to the first data point
@@ -48,7 +50,9 @@ def compute_weighted_frechet_mean(manifold, data, weights, nb_iter_max=10, conve
 
 def sample_from_gaussian_on_manifold(manifold, mean, covariance, nb_samples):
     # Generate samples in the tangent space of the mean
-    samples = np.dot(sc.linalg.sqrtm(covariance), np.random.randn(mean.shape[0], nb_samples))
+    samples = np.dot(
+        sc.linalg.sqrtm(covariance), np.random.randn(mean.shape[0], nb_samples)
+    )
 
     # Ensure that they are in the tangent space of the mean
     for n in range(nb_samples):

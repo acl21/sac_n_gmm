@@ -1,7 +1,9 @@
 import abc
 import numpy as np
 from SkillsRefining.utils.orientation_utils import sphere_logarithmic_map_batch
-from SkillsRefining.utils.orientation_utils import compute_analytical_orientation_jacobian_sphere_batch
+from SkillsRefining.utils.orientation_utils import (
+    compute_analytical_orientation_jacobian_sphere_batch,
+)
 from SkillsRefining.utils.matrices_processing import assign_matrix
 
 
@@ -9,6 +11,7 @@ class Skill(object):
     """
     Abstract class setting out a template for skills classes. Skills should inherit from this class.
     """
+
     def __init__(self, desired_value):
         """
         This function initializes the skill class.
@@ -100,7 +103,7 @@ class JointStopSkillBatch(Skill):
         self.config_idx = config_idx
         self.state_idx = state_idx
         if name is None:
-            self.name = type(self).__name__ + "_" + np.random.randint(0,10)
+            self.name = type(self).__name__ + "_" + np.random.randint(0, 10)
         else:
             self.name = name
 
@@ -121,10 +124,10 @@ class JointStopSkillBatch(Skill):
             if self.state_idx is not None:
                 dq = dq[:, self.state_idx]
             else:
-                dq = dq[:, :self.desired_value.shape[-1]]
+                dq = dq[:, : self.desired_value.shape[-1]]
 
         if dq.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('q should have the same batch size as the desired value')
+            raise ValueError("q should have the same batch size as the desired value")
 
         return np.zeros(shape=dq.shape)
 
@@ -156,7 +159,7 @@ class JointPositionSkillBatch(Skill):
         self.state_idx = state_idx
         self.orignal_state_idx = state_idx
         if name is None:
-            self.name = type(self).__name__ + "_" + str(np.random.randint(0,10))
+            self.name = type(self).__name__ + "_" + str(np.random.randint(0, 10))
         else:
             self.name = name
 
@@ -184,9 +187,9 @@ class JointPositionSkillBatch(Skill):
                 q = q[:, self.state_idx]
             else:
                 q = q[:, self.orignal_state_idx]
-                
+
         if q.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('q should have the same batch size as the desired value')
+            raise ValueError("q should have the same batch size as the desired value")
 
         return self.desired_value - q
 
@@ -202,13 +205,21 @@ class JointPositionSkillBatch(Skill):
 
         jac = np.eye(q.shape[-1])
         jac = np.expand_dims(jac, axis=0)
-        jac = np.tile(jac, (q.shape[0],1,1))
+        jac = np.tile(jac, (q.shape[0], 1, 1))
         return jac
 
 
 class TaskspaceSkillBatch(Skill):
-    def __init__(self, desired_value, pos_dim=2, name=None, compute_fct_batch=None,
-                 compute_jacobian_fct_batch=None, config_idx=None, state_idx=None):
+    def __init__(
+        self,
+        desired_value,
+        pos_dim=2,
+        name=None,
+        compute_fct_batch=None,
+        compute_jacobian_fct_batch=None,
+        config_idx=None,
+        state_idx=None,
+    ):
         super().__init__(desired_value)
         self.compute_ts_fct_batch = compute_fct_batch
         self.compute_ts_jacobian_fct_batch = compute_jacobian_fct_batch
@@ -217,7 +228,7 @@ class TaskspaceSkillBatch(Skill):
         self.state_idx = state_idx
         self.orignal_state_idx = state_idx
         if name is None:
-            self.name = type(self).__name__ + "_" + str(np.random.randint(0,10))
+            self.name = type(self).__name__ + "_" + str(np.random.randint(0, 10))
         else:
             self.name = name
 
@@ -229,7 +240,7 @@ class TaskspaceSkillBatch(Skill):
     def update_desired_value(self, desired_value, use_state_idx=False):
         if len(desired_value.shape) < 2:
             desired_value = np.expand_dims(desired_value, axis=0)
-        
+
         if use_state_idx and self.state_idx is not None:
             desired_value = desired_value[:, self.state_idx]
 
@@ -248,11 +259,11 @@ class TaskspaceSkillBatch(Skill):
             else:
                 x = x[:, self.orignal_state_idx]
 
-        tx = x[:, :self.pos_dim]
-        terror = self.desired_value[:, :self.pos_dim] - tx
-        rx = x[:, self.pos_dim:]
+        tx = x[:, : self.pos_dim]
+        terror = self.desired_value[:, : self.pos_dim] - tx
+        rx = x[:, self.pos_dim :]
 
-        rerror = sphere_logarithmic_map_batch(self.desired_value[:, self.pos_dim:], rx)
+        rerror = sphere_logarithmic_map_batch(self.desired_value[:, self.pos_dim :], rx)
         return np.concatenate([terror, rerror], axis=-1)
 
     def error_from_fk(self, q):
@@ -261,7 +272,7 @@ class TaskspaceSkillBatch(Skill):
 
         if self.config_idx is not None:
             q = q[:, self.config_idx]
-        
+
         x = self.compute_ts_fct_batch(q)
         return self.error(self.compute_ts_fct_batch(q))
 
@@ -279,26 +290,36 @@ class TaskspaceSkillBatch(Skill):
             ts_fct = np.expand_dims(ts_fct, axis=0)
 
         if self.pos_dim == 2:
-            pos_jac = ts_jacobian[:, :-1,:]
-            current_orientation = ts_fct[:, self.pos_dim:]
-            orientation_jacobian = ts_jacobian[:, -1, :][:, np.newaxis,:]
-            ori_jac = compute_analytical_orientation_jacobian_sphere_batch(current_orientation, orientation_jacobian)
+            pos_jac = ts_jacobian[:, :-1, :]
+            current_orientation = ts_fct[:, self.pos_dim :]
+            orientation_jacobian = ts_jacobian[:, -1, :][:, np.newaxis, :]
+            ori_jac = compute_analytical_orientation_jacobian_sphere_batch(
+                current_orientation, orientation_jacobian
+            )
             jac = np.concatenate([pos_jac, ori_jac], axis=1)
         else:
-            pos_jac = ts_jacobian[:, :self.pos_dim, :]
-            current_orientation = ts_fct[:, self.pos_dim:]
+            pos_jac = ts_jacobian[:, : self.pos_dim, :]
+            current_orientation = ts_fct[:, self.pos_dim :]
 
-            orientation_jacobian = ts_jacobian[:, self.pos_dim:, :][:, np.newaxis, :]
-            ori_jac = compute_analytical_orientation_jacobian_sphere_batch(current_orientation, orientation_jacobian, self.pos_dim)
+            orientation_jacobian = ts_jacobian[:, self.pos_dim :, :][:, np.newaxis, :]
+            ori_jac = compute_analytical_orientation_jacobian_sphere_batch(
+                current_orientation, orientation_jacobian, self.pos_dim
+            )
             jac = np.concatenate([pos_jac, ori_jac], axis=1)
 
         return jac
 
 
 class PositionSkillBatch(Skill):
-    def __init__(self, desired_value, name=None,
-                 compute_fct_batch=None,
-                 compute_jacobian_fct_batch=None, config_idx=None, state_idx=None):
+    def __init__(
+        self,
+        desired_value,
+        name=None,
+        compute_fct_batch=None,
+        compute_jacobian_fct_batch=None,
+        config_idx=None,
+        state_idx=None,
+    ):
         """
         The batch version of PositionSkill (see skill_classes). The functions should support batch calculation including
         batch matrix operation.
@@ -312,7 +333,7 @@ class PositionSkillBatch(Skill):
         self.state_idx = state_idx
 
         if name is None:
-            self.name = type(self).__name__ + "_" + str(np.random.randint(0,10))
+            self.name = type(self).__name__ + "_" + str(np.random.randint(0, 10))
         else:
             self.name = name
 
@@ -354,10 +375,10 @@ class PositionSkillBatch(Skill):
             if self.state_idx is not None:
                 x = x[:, self.state_idx]
             else:
-                x = x[:, :self.desired_value.shape[-1]]
+                x = x[:, : self.desired_value.shape[-1]]
 
         if x.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('x should have the same batch size as the desired value')
+            raise ValueError("x should have the same batch size as the desired value")
 
         return self.desired_value - x
 
@@ -377,7 +398,7 @@ class PositionSkillBatch(Skill):
             q = q[:, self.config_idx]
 
         if q.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('q should have the same batch size as the desired value')
+            raise ValueError("q should have the same batch size as the desired value")
 
         current_position = self.compute_position_fct(q)
         return self.error(current_position)
@@ -428,8 +449,16 @@ class OrientationSkillBatch(Skill):
     The batch version of OrientationSkill (see skill_classes). The functions should support batch calculation including
     batch matrix operation.
     """
-    def __init__(self, desired_value, name=None, compute_fct_batch=None,
-                 compute_jacobian_fct_batch=None, config_idx=None, state_idx=None):
+
+    def __init__(
+        self,
+        desired_value,
+        name=None,
+        compute_fct_batch=None,
+        compute_jacobian_fct_batch=None,
+        config_idx=None,
+        state_idx=None,
+    ):
         super().__init__(desired_value)
         self.compute_orientation_fct = compute_fct_batch
         self.compute_orientation_jacobian_fct = compute_jacobian_fct_batch
@@ -437,7 +466,7 @@ class OrientationSkillBatch(Skill):
         self.config_idx = config_idx
         self.state_idx = state_idx
         if name is None:
-            self.name = type(self).__name__ + "_" + str(np.random.randint(0,10))
+            self.name = type(self).__name__ + "_" + str(np.random.randint(0, 10))
         else:
             self.name = name
 
@@ -480,10 +509,10 @@ class OrientationSkillBatch(Skill):
             if self.state_idx is not None:
                 x = x[:, self.state_idx]
             else:
-                x = x[:, :self.desired_value.shape[-1]]
+                x = x[:, : self.desired_value.shape[-1]]
 
         if x.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('x should have the same batch size as the desired value')
+            raise ValueError("x should have the same batch size as the desired value")
 
         return sphere_logarithmic_map_batch(self.desired_value, x)
 
@@ -503,7 +532,7 @@ class OrientationSkillBatch(Skill):
             q = q[:, self.config_idx]
 
         if q.shape[0] != self.desired_value.shape[0]:
-            raise ValueError('q should have the same batch size as the desired value')
+            raise ValueError("q should have the same batch size as the desired value")
 
         current_orientation = self.compute_orientation_fct(q)
         return self.error(current_orientation)
@@ -528,18 +557,21 @@ class OrientationSkillBatch(Skill):
         current_orientation = self.compute_orientation_fct(q)
         orientation_jacobian = self.compute_orientation_jacobian_fct(q)
 
-        ori_jac = compute_analytical_orientation_jacobian_sphere_batch(current_orientation, orientation_jacobian)
+        ori_jac = compute_analytical_orientation_jacobian_sphere_batch(
+            current_orientation, orientation_jacobian
+        )
         if len(ori_jac.shape) < 3:
             ori_jac = np.expand_dims(ori_jac, axis=0)
 
         return ori_jac
 
 
-class SkillComplex():
+class SkillComplex:
     """
     This class encodes a set of skills and allows the computation of the error and Jacobian including all skills in
     combined matrices.
     """
+
     def __init__(self, state_dim, config_dim, skills, skill_cluster_idx=None):
         """
         Initialization of the class
@@ -561,7 +593,10 @@ class SkillComplex():
         self.total_dim = total_dim
 
     def update_desired_value(self, desired_value, use_state_idx=False):
-        [skill.update_desired_value(desired_value, use_state_idx) for skill in self.skills]
+        [
+            skill.update_desired_value(desired_value, use_state_idx)
+            for skill in self.skills
+        ]
 
     def error(self, state, use_state_index=True):
         err = [skill.error(state, use_state_index) for skill in self.skills]
@@ -612,9 +647,6 @@ class SkillComplex():
                 state_idx = skill.state_idx
 
             xres.append(x[:, state_idx])
-        
+
         xres = np.concatenate(xres, axis=-1)
         return xres
-
-
-

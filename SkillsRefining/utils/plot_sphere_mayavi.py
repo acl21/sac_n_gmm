@@ -4,11 +4,22 @@ from mayavi import mlab
 from typing import Union, Tuple
 import scipy
 
-from SkillsRefining.utils.sphere_utils import get_axisangle, rotation_matrix_from_axis_angle
+from SkillsRefining.utils.sphere_utils import (
+    get_axisangle,
+    rotation_matrix_from_axis_angle,
+)
 
 
-def plot_sphere(color: Tuple = (0.7, 0.7, 0.7), opacity: float = 0.8, radius: float = 0.99, n_elems: int = 100,
-                figure=None, scalars=None, colormap=None, offset: np.ndarray = np.array([0., 0., 0.])):
+def plot_sphere(
+    color: Tuple = (0.7, 0.7, 0.7),
+    opacity: float = 0.8,
+    radius: float = 0.99,
+    n_elems: int = 100,
+    figure=None,
+    scalars=None,
+    colormap=None,
+    offset: np.ndarray = np.array([0.0, 0.0, 0.0]),
+):
     """
     Plots a sphere
 
@@ -33,17 +44,42 @@ def plot_sphere(color: Tuple = (0.7, 0.7, 0.7), opacity: float = 0.8, radius: fl
     z = radius * np.outer(np.ones(np.size(u)), np.cos(v))
 
     if scalars is not None:
-        mlab.mesh(x + offset[0], y + offset[1], z + offset[2], figure=figure, opacity=opacity,
-                  scalars=scalars, colormap=colormap)
+        mlab.mesh(
+            x + offset[0],
+            y + offset[1],
+            z + offset[2],
+            figure=figure,
+            opacity=opacity,
+            scalars=scalars,
+            colormap=colormap,
+        )
     elif colormap is not None:
-        mlab.mesh(x + offset[0], y + offset[1], z + offset[2], figure=figure, opacity=opacity, colormap=colormap)
+        mlab.mesh(
+            x + offset[0],
+            y + offset[1],
+            z + offset[2],
+            figure=figure,
+            opacity=opacity,
+            colormap=colormap,
+        )
     else:
-        mlab.mesh(x + offset[0], y + offset[1], z + offset[2], figure=figure, color=color, opacity=opacity)
+        mlab.mesh(
+            x + offset[0],
+            y + offset[1],
+            z + offset[2],
+            figure=figure,
+            color=color,
+            opacity=opacity,
+        )
 
 
-
-def plot_sphere_tangent_plane(base: np.ndarray, l_vert: float = 1, opacity: float = 0.5, figure=None,
-                              offset: np.ndarray = np.array([0., 0., 0.])):
+def plot_sphere_tangent_plane(
+    base: np.ndarray,
+    l_vert: float = 1,
+    opacity: float = 0.5,
+    figure=None,
+    offset: np.ndarray = np.array([0.0, 0.0, 0.0]),
+):
     """
     This function plots the tangent plane of a point lying on the sphere manifold.
     Based on the function of riepybdlib (https://gitlab.martijnzeestraten.nl/martijn/riepybdlib)
@@ -74,26 +110,42 @@ def plot_sphere_tangent_plane(base: np.ndarray, l_vert: float = 1, opacity: floa
 
     # Compute vertices of tangent plane at g
     hl = 0.5 * l_vert
-    X = [[hl, hl],  # p0
-         [hl, -hl],  # p1
-         [-hl, hl],  # p2
-         [-hl, -hl]]  # p3
+    X = [[hl, hl], [hl, -hl], [-hl, hl], [-hl, -hl]]  # p0  # p1  # p2  # p3
     X = np.array(X).T
     points = (T.dot(X).T + base).T
 
     # Plot tangent space
     psurf = points.reshape((-1, 2, 2))
-    mlab.mesh(psurf[0] + offset[0], psurf[1] + offset[1], psurf[2] + offset[2],
-              color=(0.9, 0.9, 0.9), opacity=opacity, figure=figure)
+    mlab.mesh(
+        psurf[0] + offset[0],
+        psurf[1] + offset[1],
+        psurf[2] + offset[2],
+        color=(0.9, 0.9, 0.9),
+        opacity=opacity,
+        figure=figure,
+    )
 
     # Plot contours of the tangent space
     contour = points[:, [0, 1, 3, 2, 0]]
-    mlab.plot3d(contour[0] + offset[0], contour[1] + offset[1], contour[2] + offset[2],
-                color=(0, 0, 0), line_width=2., tube_radius=None, figure=figure)
+    mlab.plot3d(
+        contour[0] + offset[0],
+        contour[1] + offset[1],
+        contour[2] + offset[2],
+        color=(0, 0, 0),
+        line_width=2.0,
+        tube_radius=None,
+        figure=figure,
+    )
 
 
-def plot_vector_on_tangent_plane(base: np.ndarray, vector: np.ndarray, color: Tuple = (0.8, 0.8, 0.8),
-                                 line_width: float = 3., r: float = 0.03, figure=None):
+def plot_vector_on_tangent_plane(
+    base: np.ndarray,
+    vector: np.ndarray,
+    color: Tuple = (0.8, 0.8, 0.8),
+    line_width: float = 3.0,
+    r: float = 0.03,
+    figure=None,
+):
     """
     This function draws a vector on the tangent space of a given point on a 2D-sphere.
 
@@ -125,13 +177,33 @@ def plot_vector_on_tangent_plane(base: np.ndarray, vector: np.ndarray, color: Tu
         # Case where the vector is already 3-dimensional
         tgt_vector = vector + base
 
-    draw_arrow_mayavi(base[0], base[1], base[2],
-                      tgt_vector[0] - base[0], tgt_vector[1] - base[1], tgt_vector[2] - base[2],
-                      r=r, color=color, line_width=line_width, figure=figure)
+    draw_arrow_mayavi(
+        base[0],
+        base[1],
+        base[2],
+        tgt_vector[0] - base[0],
+        tgt_vector[1] - base[1],
+        tgt_vector[2] - base[2],
+        r=r,
+        color=color,
+        line_width=line_width,
+        figure=figure,
+    )
 
 
-def draw_arrow_mayavi(x: float, y: float, z: float, u: float, v: float, w: float, r: float = 0.025,
-                      color: Tuple = (0, 0, 0), line_width: float = 2., n_elems: int = 30, figure=None):
+def draw_arrow_mayavi(
+    x: float,
+    y: float,
+    z: float,
+    u: float,
+    v: float,
+    w: float,
+    r: float = 0.025,
+    color: Tuple = (0, 0, 0),
+    line_width: float = 2.0,
+    n_elems: int = 30,
+    figure=None,
+):
     """
     This function draws an arrow with mayavi.
 
@@ -167,14 +239,16 @@ def draw_arrow_mayavi(x: float, y: float, z: float, u: float, v: float, w: float
     # Rotation of the cone
     # 90°
     axis = np.array([0, 1, 0])
-    R = rotation_matrix_from_axis_angle(axis, np.pi / 2.)
+    R = rotation_matrix_from_axis_angle(axis, np.pi / 2.0)
 
     # Arrow direction
     axis, ang = get_axisangle(diff_base_tip / np.linalg.norm(diff_base_tip))
     R = rotation_matrix_from_axis_angle(axis, ang).dot(R)
 
     # Points of the cone
-    xyz = np.vstack((r*2 * np.ones(n_elems), r * np.sin(phi), r / np.sqrt(2) * np.cos(phi)))
+    xyz = np.vstack(
+        (r * 2 * np.ones(n_elems), r * np.sin(phi), r / np.sqrt(2) * np.cos(phi))
+    )
     xyz = R.dot(xyz)
 
     xcone = np.vstack((np.zeros(n_elems), xyz[0])) + tip[0]
@@ -183,13 +257,22 @@ def draw_arrow_mayavi(x: float, y: float, z: float, u: float, v: float, w: float
 
     # Plot vector
     vector = np.stack((base, tip))
-    mlab.plot3d(vector[:, 0], vector[:, 1], vector[:, 2], color=color, line_width=line_width,
-                tube_radius=None, figure=None)
+    mlab.plot3d(
+        vector[:, 0],
+        vector[:, 1],
+        vector[:, 2],
+        color=color,
+        line_width=line_width,
+        tube_radius=None,
+        figure=None,
+    )
     # Plot tip
     mlab.mesh(xcone, ycone, zcone, color=color)
 
 
-def plot_gaussian_mesh_on_tangent_plane(mu, sigma, color, offset: np.ndarray = np.array([0., 0., 0.])):
+def plot_gaussian_mesh_on_tangent_plane(
+    mu, sigma, color, offset: np.ndarray = np.array([0.0, 0.0, 0.0])
+):
     """
     Plot the Gaussian with the mean mu and covariance matrix sigma in the 2D-sphere.
 
@@ -250,4 +333,3 @@ def plot_gaussian_mesh_on_tangent_plane(mu, sigma, color, offset: np.ndarray = n
 
     mlab.mesh(x, y, z, color=color, opacity=0.15)
     # mlab.plot3d(contour[0, :], contour[1, :], contour[2, :], color=color, line_width=3, tube_radius=None, opacity=1.)
-

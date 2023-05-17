@@ -19,10 +19,10 @@ def get_pickplace_parameters():
 
 
 def get_pickplace_arm_skill_files():
-    pick_clf = 'examples/GripperExperiment/pickplace_ds_skill/pick_posi_clf'
-    pick_ds = 'examples/GripperExperiment/pickplace_ds_skill/pick_posi_ds'
-    place_clf = 'examples/GripperExperiment/pickplace_ds_skill/place_posi_clf'
-    place_ds = 'examples/GripperExperiment/pickplace_ds_skill/place_posi_ds'
+    pick_clf = "examples/GripperExperiment/pickplace_ds_skill/pick_posi_clf"
+    pick_ds = "examples/GripperExperiment/pickplace_ds_skill/pick_posi_ds"
+    place_clf = "examples/GripperExperiment/pickplace_ds_skill/place_posi_clf"
+    place_ds = "examples/GripperExperiment/pickplace_ds_skill/place_posi_ds"
     return pick_ds, pick_clf, place_ds, place_clf
 
 
@@ -34,7 +34,7 @@ def create_ds_skill(clf_file, reg_file, qtarget, goal, speed=0.01):
 
     def ds_skill(x):
         x = x[:2]
-        d_x = clfds.reg_model.forward(torch.from_numpy(x- goal).to(device))
+        d_x = clfds.reg_model.forward(torch.from_numpy(x - goal).to(device))
         d_x = d_x.detach().cpu().numpy()
         x = x + speed * d_x
         x = np.append(x, qtarget)
@@ -58,7 +58,7 @@ def check_ds(ax, x0, clf_file, reg_file, qtarget, goal):
     for _ in range(T):
         x0 = ds(x0)[:2]
         test_traj = np.append(test_traj, np.expand_dims(x0, axis=0), axis=0)
-        ax.plot(test_traj[:, 0], test_traj[:, 1], 'b-', linewidth=3)
+        ax.plot(test_traj[:, 0], test_traj[:, 1], "b-", linewidth=3)
 
     plt.show()
 

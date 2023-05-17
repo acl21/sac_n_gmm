@@ -6,7 +6,9 @@ from SkillsRefining.utils.orientation_utils import rotation_matrix_to_unit_spher
 
 
 class Gripper2D:
-    def __init__(self, nb_dofs_arm=4, nb_dofs_finger=3,  arm_link_length=4, gripper_link_length=2):
+    def __init__(
+        self, nb_dofs_arm=4, nb_dofs_finger=3, arm_link_length=4, gripper_link_length=2
+    ):
         """
         Initialize a 2D robot with gripper using the robotics toolbox.
 
@@ -17,26 +19,34 @@ class Gripper2D:
         :param arm_link_length: length of the links of the arm
         :param gripper_link_length: length of the links of the fingers
         """
-        link_arm = rtb.RevoluteDH(d=0., a=arm_link_length, alpha=0.)
-        link_finger = rtb.RevoluteDH(d=0., a=gripper_link_length, alpha=0.)
-        links_list = [link_arm for _ in range(nb_dofs_arm)] + [link_finger for _ in range(nb_dofs_finger)]
+        link_arm = rtb.RevoluteDH(d=0.0, a=arm_link_length, alpha=0.0)
+        link_finger = rtb.RevoluteDH(d=0.0, a=gripper_link_length, alpha=0.0)
+        links_list = [link_arm for _ in range(nb_dofs_arm)] + [
+            link_finger for _ in range(nb_dofs_finger)
+        ]
 
         # Robot
         self.robot = rtb.DHRobot(links_list)
         # Link lengths (arm and fingers)
-        self.link_lengths = np.array([arm_link_length] * nb_dofs_arm + [gripper_link_length] * nb_dofs_finger)
+        self.link_lengths = np.array(
+            [arm_link_length] * nb_dofs_arm + [gripper_link_length] * nb_dofs_finger
+        )
         # Total number of DoFs (arm + 2 x fingers)
         self.total_links = nb_dofs_arm + 2 * nb_dofs_finger
         # Ids of arm joints
         self.arm_idx = [i for i in range(nb_dofs_arm)]
         # Ids of left and right finger of the gripper
         self.lgripper_idx = [i + nb_dofs_arm for i in range(nb_dofs_finger)]
-        self.rgripper_idx = [i + nb_dofs_arm + nb_dofs_finger for i in range(nb_dofs_finger)]
+        self.rgripper_idx = [
+            i + nb_dofs_arm + nb_dofs_finger for i in range(nb_dofs_finger)
+        ]
         # Ids of the gripper (left + right finger)
         self.gripper_idx = self.lgripper_idx + self.rgripper_idx
         # Ids for the kinematic chain of the arm and left/right gripper finger
         self.lf_idx = self.arm_idx + [i + nb_dofs_arm for i in range(nb_dofs_finger)]
-        self.rf_idx = self.arm_idx + [i + nb_dofs_arm + nb_dofs_finger for i in range(nb_dofs_finger)]
+        self.rf_idx = self.arm_idx + [
+            i + nb_dofs_arm + nb_dofs_finger for i in range(nb_dofs_finger)
+        ]
 
     def plot(self, ax, q, facecolor):
         """
@@ -51,8 +61,12 @@ class Gripper2D:
         ------
         :return: -
         """
-        patch_list_left = plot_planar_robot(ax, q[self.lf_idx], self.link_lengths, facecolor=facecolor)
-        patch_list_right = plot_planar_robot(ax, q[self.rf_idx], self.link_lengths, facecolor=facecolor)
+        patch_list_left = plot_planar_robot(
+            ax, q[self.lf_idx], self.link_lengths, facecolor=facecolor
+        )
+        patch_list_right = plot_planar_robot(
+            ax, q[self.rf_idx], self.link_lengths, facecolor=facecolor
+        )
         return patch_list_left + patch_list_right
 
     def arm_position_fct(self, q):
@@ -71,7 +85,10 @@ class Gripper2D:
         while q.shape[-1] < self.total_links:
             q = np.concatenate([q, [[0.0]]], axis=-1)
 
-        fct = [self.robot.fkine_all(q[i, self.lf_idx]).t[self.arm_idx[-1]+1, 0:2] for i in range(batch_size)]
+        fct = [
+            self.robot.fkine_all(q[i, self.lf_idx]).t[self.arm_idx[-1] + 1, 0:2]
+            for i in range(batch_size)
+        ]
         return np.stack(fct)
 
     def arm_position_jacobian_fct(self, q):
@@ -90,7 +107,10 @@ class Gripper2D:
         while q.shape[-1] < self.total_links:
             q = np.concatenate([q, [[0.0]]], axis=-1)
 
-        jacob = [self.robot.jacob0(q[i, self.lf_idx])[0:2, self.arm_idx] for i in range(batch_size)]
+        jacob = [
+            self.robot.jacob0(q[i, self.lf_idx])[0:2, self.arm_idx]
+            for i in range(batch_size)
+        ]
         return np.stack(jacob)
 
     def arm_orientation_fct(self, q):
@@ -109,8 +129,14 @@ class Gripper2D:
         while q.shape[-1] < self.total_links:
             q = np.concatenate([q, [[0.0]]], axis=-1)
 
-        fct = [rotation_matrix_to_unit_sphere(self.robot.fkine_all(q[i, self.lf_idx]).R[self.arm_idx[-1]+1, 0:2, 0:2])
-               for i in range(batch_size)]
+        fct = [
+            rotation_matrix_to_unit_sphere(
+                self.robot.fkine_all(q[i, self.lf_idx]).R[
+                    self.arm_idx[-1] + 1, 0:2, 0:2
+                ]
+            )
+            for i in range(batch_size)
+        ]
         return np.stack(fct)
 
     def arm_orientation_jacobian_fct(self, q):
@@ -129,7 +155,10 @@ class Gripper2D:
         while q.shape[-1] < self.total_links:
             q = np.concatenate([q, [[0.0]]], axis=-1)
 
-        jacob = [self.robot.jacob0(q[i, self.lf_idx])[-1, self.arm_idx][None] for i in range(batch_size)]
+        jacob = [
+            self.robot.jacob0(q[i, self.lf_idx])[-1, self.arm_idx][None]
+            for i in range(batch_size)
+        ]
         return np.stack(jacob)
 
     def compute_ts_arm_fct(self, q):
@@ -170,13 +199,15 @@ class Gripper2D:
         """
         Returns the desired position for the close-gripper skill
         """
-        return np.array([np.pi/2, -np.pi/2, -np.pi/3, -np.pi/2, np.pi/2, np.pi/3])
+        return np.array(
+            [np.pi / 2, -np.pi / 2, -np.pi / 3, -np.pi / 2, np.pi / 2, np.pi / 3]
+        )
 
     def open_skill(self, t):
         """
         Returns the desired position for the open-gripper skill
         """
-        return np.array([np.pi/2, -np.pi/3, 0, -np.pi/2, np.pi/3, 0])
+        return np.array([np.pi / 2, -np.pi / 3, 0, -np.pi / 2, np.pi / 3, 0])
 
     def stop_arm_skill(self, t):
         """
@@ -189,4 +220,3 @@ class Gripper2D:
         Returns the desired position for the stop-gripper skill
         """
         return np.array([0, 0, 0, 0, 0, 0])
-

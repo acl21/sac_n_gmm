@@ -2,6 +2,7 @@ import torch
 from torch.utils.data import Dataset
 
 from SkillsRefining.utils.utils import prepare_torch
+
 device = prepare_torch()
 
 
@@ -9,6 +10,7 @@ class SkillDataset(Dataset):
     """
     This dataset class holds the training data for batch training
     """
+
     def __init__(self, feat, qt, dqt, desired):
         """
         Initialization of the SkillDataset class.
@@ -30,7 +32,9 @@ class SkillDataset(Dataset):
         return len(self.feat)
 
     def __getitem__(self, item):
-
-        return self.feat[item, :], self.qt[item, :],  self.dqt[item, :], self.desired_[item,:]
-
-
+        return (
+            self.feat[item, :],
+            self.qt[item, :],
+            self.dqt[item, :],
+            self.desired_[item, :],
+        )

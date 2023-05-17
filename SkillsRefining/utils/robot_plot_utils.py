@@ -7,11 +7,14 @@ import matplotlib.path as mpath
 import matplotlib.patches as mpatches
 
 
-def plot_planar_robot(ax,
-                      joint_angles: np.ndarray, link_lengths: Union[int, np.ndarray],
-                      width_param: float = 0.5, facecolor: Union[str, list] = 'darkblue',
-                      edgecolor: Union[str, list] = 'white') \
-        -> list:
+def plot_planar_robot(
+    ax,
+    joint_angles: np.ndarray,
+    link_lengths: Union[int, np.ndarray],
+    width_param: float = 0.5,
+    facecolor: Union[str, list] = "darkblue",
+    edgecolor: Union[str, list] = "white",
+) -> list:
     """
     This function displays a serial planar robot with an arbitrary number of joints.
 
@@ -40,7 +43,7 @@ def plot_planar_robot(ax,
 
     """
     # Make background white
-    ax.patch.set_facecolor('white')
+    ax.patch.set_facecolor("white")
     # No grid
     ax.grid(False)
     # Patch list to return
@@ -59,17 +62,26 @@ def plot_planar_robot(ax,
     # Plot links
     current_endeff_position = np.zeros(2)
     for i in range(len(joint_angles)):
-        patch_list_link, current_endeff_position = plot_robot_link(ax, np.sum(joint_angles[:i+1]), link_lengths[i],
-                                                                   current_endeff_position, width_param, facecolor,
-                                                                   edgecolor)
+        patch_list_link, current_endeff_position = plot_robot_link(
+            ax,
+            np.sum(joint_angles[: i + 1]),
+            link_lengths[i],
+            current_endeff_position,
+            width_param,
+            facecolor,
+            edgecolor,
+        )
         patch_list.append(patch_list_link)
 
     return patch_list
 
 
-def plot_robot_basis(ax, width_param: float = 0.05,
-                     facecolor: Union[str, list] = 'gray', edgecolor: Union[str, list] = 'white') \
-        -> list:
+def plot_robot_basis(
+    ax,
+    width_param: float = 0.05,
+    facecolor: Union[str, list] = "gray",
+    edgecolor: Union[str, list] = "white",
+) -> list:
     """
     This function displays the basis of a serial planar robot with an arbitrary number of joints.
 
@@ -95,11 +107,18 @@ def plot_robot_basis(ax, width_param: float = 0.05,
     # Define contour
     t1 = np.linspace(0, np.pi, nb_segments - 2)
     x = np.zeros((nb_segments, 2))
-    x[:, 0] = np.append(np.append(width_param * 1.5, width_param * 1.5 * np.cos(t1)), -width_param * 1.5)
-    x[:, 1] = np.append(np.append(-width_param * 1.2, width_param * 1.5 * np.sin(t1)), - width_param * 1.2)
+    x[:, 0] = np.append(
+        np.append(width_param * 1.5, width_param * 1.5 * np.cos(t1)), -width_param * 1.5
+    )
+    x[:, 1] = np.append(
+        np.append(-width_param * 1.2, width_param * 1.5 * np.sin(t1)),
+        -width_param * 1.2,
+    )
     # Draw path
     path = mpath.Path(x)
-    patch = mpatches.PathPatch(path, facecolor=facecolor, edgecolor=edgecolor, linewidth=1)
+    patch = mpatches.PathPatch(
+        path, facecolor=facecolor, edgecolor=edgecolor, linewidth=1
+    )
     ax.add_patch(patch)
 
     # Patch list to return
@@ -110,22 +129,29 @@ def plot_robot_basis(ax, width_param: float = 0.05,
     x2 = np.zeros((5, 2))
     x2[:, 0] = np.linspace(-width_param * 1.2, width_param * 1.2, 5)
     x2[:, 1] = -width_param * 1.2
-    x3 = x2 + np.tile(0.25*np.array([-0.5, -1]), (5, 1))
+    x3 = x2 + np.tile(0.25 * np.array([-0.5, -1]), (5, 1))
     # Define and draw paths
     for i in range(5):
         x_path = np.array([[x2[i, 0], x2[i, 1]], [x3[i, 0], x3[i, 1]]])
         path = mpath.Path(x_path)
-        patch_line = mpatches.PathPatch(path, facecolor=facecolor, edgecolor=facecolor, linewidth=2)
+        patch_line = mpatches.PathPatch(
+            path, facecolor=facecolor, edgecolor=facecolor, linewidth=2
+        )
         ax.add_patch(patch_line)
         patch_list.append(patch_line)
 
     return patch_list
 
 
-def plot_robot_link(ax,
-                    angle: float, link_length: int, base_position: np.ndarray, width_param: float = 0.05,
-                    facecolor: Union[str, list] = 'gray', edgecolor: Union[str, list] = 'white') \
-        -> Tuple[list, np.ndarray]:
+def plot_robot_link(
+    ax,
+    angle: float,
+    link_length: int,
+    base_position: np.ndarray,
+    width_param: float = 0.05,
+    facecolor: Union[str, list] = "gray",
+    edgecolor: Union[str, list] = "white",
+) -> Tuple[list, np.ndarray]:
     """
     This function displays a link of a serial planar robot with an arbitrary number of joints.
 
@@ -151,11 +177,13 @@ def plot_robot_link(ax,
     nb_segments = 30
 
     # Draw link "bar"
-    t1 = np.linspace(0, -np.pi, int(nb_segments/2))
-    t2 = np.linspace(np.pi, 0, int(nb_segments/2))
+    t1 = np.linspace(0, -np.pi, int(nb_segments / 2))
+    t2 = np.linspace(np.pi, 0, int(nb_segments / 2))
     # Define contour
     x = np.zeros((nb_segments, 2))
-    x[:, 0] = np.append(width_param * np.sin(t1), link_length + width_param * np.sin(t2))
+    x[:, 0] = np.append(
+        width_param * np.sin(t1), link_length + width_param * np.sin(t2)
+    )
     x[:, 1] = np.append(width_param * np.cos(t1), width_param * np.cos(t2))
     x = np.vstack((x, x[0, :]))  # Add first element at the end to have a closed contour
     # Rotate contours
@@ -163,7 +191,9 @@ def plot_robot_link(ax,
     x = np.dot(R, x.T).T + base_position
     # Draw path
     path = mpath.Path(x)
-    patch = mpatches.PathPatch(path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2)
+    patch = mpatches.PathPatch(
+        path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2
+    )
     ax.add_patch(patch)
 
     # Draw holes
@@ -175,11 +205,15 @@ def plot_robot_link(ax,
     msh *= width_param * 0.2
     # Draw first circle
     path = mpath.Path(msh + base_position)
-    patch_circle1 = mpatches.PathPatch(path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2)
+    patch_circle1 = mpatches.PathPatch(
+        path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2
+    )
     ax.add_patch(patch_circle1)
     # Draw second circle
     path = mpath.Path(msh + endeff_position)
-    patch_circle2 = mpatches.PathPatch(path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2)
+    patch_circle2 = mpatches.PathPatch(
+        path, facecolor=facecolor, edgecolor=edgecolor, linewidth=2
+    )
     ax.add_patch(patch_circle2)
 
     # Patch list to return

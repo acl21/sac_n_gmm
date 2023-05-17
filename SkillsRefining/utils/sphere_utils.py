@@ -1,6 +1,7 @@
 from typing import Union, Tuple
 import numpy as np
 
+
 def get_axisangle(d: np.ndarray) -> Tuple[np.ndarray, float]:
     """
     This function gets the axis-angle representation of a point lying on a unit sphere
@@ -14,12 +15,12 @@ def get_axisangle(d: np.ndarray) -> Tuple[np.ndarray, float]:
     -------
     :return: axis, angle: corresponding axis and angle representation
     """
-    norm = np.sqrt(d[0]**2 + d[1]**2)
+    norm = np.sqrt(d[0] ** 2 + d[1] ** 2)
     if norm < 1e-6:
         return np.array([0, 0, 1]), 0
     else:
         vec = np.array([-d[1], d[0], 0])
-        return vec/norm, np.arccos(d[2])
+        return vec / norm, np.arccos(d[2])
 
 
 def rotation_matrix_to_unit_sphere(R: np.ndarray) -> Union[np.ndarray, int]:
@@ -57,26 +58,26 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
     :return: a quaternion [scalar term, vector term]
     """
 
-    qs = min(np.sqrt(np.trace(R) + 1)/2.0, 1.0)
-    kx = R[2, 1] - R[1, 2]   # Oz - Ay
-    ky = R[0, 2] - R[2, 0]   # Ax - Nz
-    kz = R[1, 0] - R[0, 1]   # Ny - Ox
+    qs = min(np.sqrt(np.trace(R) + 1) / 2.0, 1.0)
+    kx = R[2, 1] - R[1, 2]  # Oz - Ay
+    ky = R[0, 2] - R[2, 0]  # Ax - Nz
+    kz = R[1, 0] - R[0, 1]  # Ny - Ox
 
-    if (R[0, 0] >= R[1, 1]) and (R[0, 0] >= R[2, 2]) :
-        kx1 = R[0, 0] - R[1, 1] - R[2, 2] + 1 # Nx - Oy - Az + 1
-        ky1 = R[1, 0] + R[0, 1]               # Ny + Ox
-        kz1 = R[2, 0] + R[0, 2]               # Nz + Ax
-        add = (kx >= 0)
-    elif (R[1, 1] >= R[2, 2]):
-        kx1 = R[1, 0] + R[0, 1]               # Ny + Ox
-        ky1 = R[1, 1] - R[0, 0] - R[2, 2] + 1 # Oy - Nx - Az + 1
-        kz1 = R[2, 1] + R[1, 2]               # Oz + Ay
-        add = (ky >= 0)
+    if (R[0, 0] >= R[1, 1]) and (R[0, 0] >= R[2, 2]):
+        kx1 = R[0, 0] - R[1, 1] - R[2, 2] + 1  # Nx - Oy - Az + 1
+        ky1 = R[1, 0] + R[0, 1]  # Ny + Ox
+        kz1 = R[2, 0] + R[0, 2]  # Nz + Ax
+        add = kx >= 0
+    elif R[1, 1] >= R[2, 2]:
+        kx1 = R[1, 0] + R[0, 1]  # Ny + Ox
+        ky1 = R[1, 1] - R[0, 0] - R[2, 2] + 1  # Oy - Nx - Az + 1
+        kz1 = R[2, 1] + R[1, 2]  # Oz + Ay
+        add = ky >= 0
     else:
-        kx1 = R[2, 0] + R[0, 2]               # Nz + Ax
-        ky1 = R[2, 1] + R[1, 2]               # Oz + Ay
-        kz1 = R[2, 2] - R[0, 0] - R[1, 1] + 1 # Az - Nx - Oy + 1
-        add = (kz >= 0)
+        kx1 = R[2, 0] + R[0, 2]  # Nz + Ax
+        ky1 = R[2, 1] + R[1, 2]  # Oz + Ay
+        kz1 = R[2, 2] - R[0, 0] - R[1, 1] + 1  # Az - Nx - Oy + 1
+        add = kz >= 0
 
     if add:
         kx = kx + kx1
@@ -92,7 +93,7 @@ def rotation_matrix_to_quaternion(R: np.ndarray) -> np.ndarray:
         q = np.zeros(4)
     else:
         s = np.sqrt(1 - qs**2) / nm
-        qv = s*np.array([kx, ky, kz])
+        qv = s * np.array([kx, ky, kz])
         q = np.hstack((qs, qv))
 
     return q
@@ -113,7 +114,7 @@ def rotation_matrix_from_axis_angle(axis: np.ndarray, angle: float) -> np.ndarra
     :return: R(ax, angle) = I + sin(angle) x ax + (1 - cos(angle) ) x ax^2 with x the cross product.
     """
     utilde = vector_to_skew_matrix(axis)
-    return np.eye(3) + np.sin(angle)*utilde + (1 - np.cos(angle))*utilde.dot(utilde)
+    return np.eye(3) + np.sin(angle) * utilde + (1 - np.cos(angle)) * utilde.dot(utilde)
 
 
 def vector_to_skew_matrix(q: np.ndarray) -> np.ndarray:
@@ -150,9 +151,9 @@ def sphere_logarithmic_map(x: np.ndarray, x0: np.ndarray) -> np.ndarray:
     if np.ndim(x) < 2:
         x = x[:, None]
 
-    distance = np.arccos(np.clip(np.dot(x0.T, x), -1., 1.))
+    distance = np.arccos(np.clip(np.dot(x0.T, x), -1.0, 1.0))
     # distance = np.arccos(np.maximum(np.minimum(np.dot(x0.T, x), 1.), -1.))
-    u = (x - x0 * np.cos(distance)) * distance/np.sin(distance)
+    u = (x - x0 * np.cos(distance)) * distance / np.sin(distance)
 
     u[:, distance[0] < 1e-16] = np.zeros((u.shape[0], 1))
     return u
@@ -172,8 +173,8 @@ def sphere_parallel_transport_operator(x1: np.ndarray, x2: np.ndarray) -> np.nda
     -------
     :return: operator: parallel transport operator
     """
-    #if np.sum(x1-x2) == 0.:
-    if np.linalg.norm(x1-x2) < 1e-10:
+    # if np.sum(x1-x2) == 0.:
+    if np.linalg.norm(x1 - x2) < 1e-10:
         return np.eye(x1.shape[0])
     else:
         if np.ndim(x1) < 2:
@@ -183,19 +184,24 @@ def sphere_parallel_transport_operator(x1: np.ndarray, x2: np.ndarray) -> np.nda
             x2 = x2[:, None]
 
         x_dir = sphere_logarithmic_map(x2, x1)
-        norm_x_dir = np.sqrt(np.sum(x_dir*x_dir, axis=0))
+        norm_x_dir = np.sqrt(np.sum(x_dir * x_dir, axis=0))
         if norm_x_dir == 0.0:
             return np.eye(len(x_dir))
         else:
             normalized_x_dir = x_dir / norm_x_dir
-            operator = np.dot(-x1 * np.sin(norm_x_dir), normalized_x_dir.T) + \
-                    np.dot(normalized_x_dir * np.cos(norm_x_dir), normalized_x_dir.T) + np.eye(x_dir.shape[0]) - \
-                    np.dot(normalized_x_dir, normalized_x_dir.T)
+            operator = (
+                np.dot(-x1 * np.sin(norm_x_dir), normalized_x_dir.T)
+                + np.dot(normalized_x_dir * np.cos(norm_x_dir), normalized_x_dir.T)
+                + np.eye(x_dir.shape[0])
+                - np.dot(normalized_x_dir, normalized_x_dir.T)
+            )
 
             return operator
 
 
-def sphere_parallel_transport(sphere, x1: np.ndarray, x2: np.ndarray, v: np.array) -> np.ndarray:
+def sphere_parallel_transport(
+    sphere, x1: np.ndarray, x2: np.ndarray, v: np.array
+) -> np.ndarray:
     """
     This function parallel transports a vector v in Tx1 from x1 to x2.
 

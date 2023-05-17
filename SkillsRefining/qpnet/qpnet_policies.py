@@ -1,8 +1,10 @@
+import torch
+import torch.nn as nn
+import numpy as np
 import torch.optim as optim
 from qpth.qp import QPFunction
-
 from SkillsRefining.qpnet.weights_net import FullyConnectedNet
-from SkillsRefining.qpnet.constraints import *
+from SkillsRefining.qpnet.constraints import EqnConstraint, IneqnConstraint
 from SkillsRefining.utils.matrices_processing import fill_diag
 from SkillsRefining.qpnet.qpnet_loss import MultipleSkillsVelocityKktLoss
 from SkillsRefining.utils.spd_manifold_utils import sqrtm_torch
@@ -10,11 +12,13 @@ from SkillsRefining.utils.utils import prepare_torch
 
 device = prepare_torch()
 
-opt_policies = ['SkillDiagonalWeightedPolicy', 'SkillFullyWeightedPolicy']
+opt_policies = ["SkillDiagonalWeightedPolicy", "SkillFullyWeightedPolicy"]
 non_opt_policies = []
 
 
-def copy_policy_parameters(current_policy, new_policy, copy_skills=False, copy_constraints=False):
+def copy_policy_parameters(
+    current_policy, new_policy, copy_skills=False, copy_constraints=False
+):
     """
     This function copies the parameters from a given (current) policy onto a new policy. This is typically used to train
     a fully-weighted-matrix-based policy, which is initialized with the parameter of a previously-trained
@@ -32,15 +36,17 @@ def copy_policy_parameters(current_policy, new_policy, copy_skills=False, copy_c
     :return: -
     """
 
-    if hasattr(current_policy, 'Qnet'):
+    if hasattr(current_policy, "Qnet"):
         new_policy.to(device)
         new_policy.Qnet = current_policy.Qnet
-    elif hasattr(current_policy, 'QDiagNet'):
+    elif hasattr(current_policy, "QDiagNet"):
         new_policy.to(device)
         new_policy.QDiagNet = current_policy.QDiagNet
         new_policy.QOffDiagNet = current_policy.QOffDiagNet
     else:
-        raise ValueError("cannot find a joint space policy that is compatible with the task space one")
+        raise ValueError(
+            "cannot find a joint space policy that is compatible with the task space one"
+        )
 
     new_policy.constant_skill_weights = current_policy.constant_skill_weights
     new_policy.eps = current_policy.eps
@@ -63,23 +69,34 @@ class SkillPolicy(nn.Module):
     weights which aims at balancing the different of magnitude between the control values of the different skills.
     This class is used as a template for all other policies.
     """
-    def __init__(self, dim, fdim, skill, eqn=None, ineqn=None, constant_skill_weights=None, eps=1e-10, dt=0.01):
+
+    def __init__(
+        self,
+        dim,
+        fdim,
+        skill,
+        eqn=None,
+        ineqn=None,
+        constant_skill_weights=None,
+        eps=1e-10,
+        dt=0.01,
+    ):
         """
-         Initialization of the SkillPolicy class.
+        Initialization of the SkillPolicy class.
 
-         Parameters
-         ----------
-         :param dim: TODO can we remove this parameter?
-         :param fdim: the dimension of the features for the parameters of the QP
-         :param skills: a list of skills
+        Parameters
+        ----------
+        :param dim: TODO can we remove this parameter?
+        :param fdim: the dimension of the features for the parameters of the QP
+        :param skills: a list of skills
 
-         Optional parameters
-         -------------------
-         :param eqn: equality constraints of the form Ax = b
-         :param ineqn: inequality constraints of the form Gx < h
-         :param eps: regularization value
-         :param dt: time step
-         """
+        Optional parameters
+        -------------------
+        :param eqn: equality constraints of the form Ax = b
+        :param ineqn: inequality constraints of the form Gx < h
+        :param eps: regularization value
+        :param dt: time step
+        """
         super(SkillPolicy, self).__init__()
         self.dim = dim
         self.fdim = fdim
@@ -209,7 +226,17 @@ class SkillDiagonalWeightedPolicy(SkillPolicy):
     differentiable-optimization layer Optnet.
     """
 
-    def __init__(self, dim, fdim, skill, eqn=None, ineqn=None, constant_skill_weights=None, eps=1e-10, dt=0.01):
+    def __init__(
+        self,
+        dim,
+        fdim,
+        skill,
+        eqn=None,
+        ineqn=None,
+        constant_skill_weights=None,
+        eps=1e-10,
+        dt=0.01,
+    ):
         """
         Initialization of the SkillDiagonalWeightedPolicy class.
 
@@ -226,7 +253,9 @@ class SkillDiagonalWeightedPolicy(SkillPolicy):
         :param eps: regularization value
         :param dt: time step
         """
-        super(SkillDiagonalWeightedPolicy, self).__init__(dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt)
+        super(SkillDiagonalWeightedPolicy, self).__init__(
+            dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt
+        )
         # FullyConnectedNet takes the features as input and outputs a weight vector indicating the weight of each skill
         self.Qnet = FullyConnectedNet(fdim, self.skill.n_skills)
 
@@ -259,9 +288,19 @@ class SkillDiagonalWeightedPolicy(SkillPolicy):
             d_datas = []
             for i in range(len(self.skill.skill_cluster_idx) - 1):
                 d_datas.append(
-                    nn.Softmax(dim=-1)(l_data[:, self.skill.skill_cluster_idx[i]:self.skill.skill_cluster_idx[i + 1]]))
+                    nn.Softmax(dim=-1)(
+                        l_data[
+                            :,
+                            self.skill.skill_cluster_idx[
+                                i
+                            ] : self.skill.skill_cluster_idx[i + 1],
+                        ]
+                    )
+                )
 
-            d_datas.append(nn.Softmax(dim=-1)(l_data[:, self.skill.skill_cluster_idx[-1]:]))
+            d_datas.append(
+                nn.Softmax(dim=-1)(l_data[:, self.skill.skill_cluster_idx[-1] :])
+            )
             l_data = torch.cat(d_datas, dim=-1)
         else:
             l_data = nn.Softmax(dim=-1)(l_data)
@@ -280,24 +319,39 @@ class SkillDiagonalWeightedPolicy(SkillPolicy):
         # Add artificial weighting of skills (to account for important differences in magnitude)
         if self.constant_skill_weights is not None:
             self.constant_skill_weights = self.constant_skill_weights.to(device)
-            constant_skill_weights = self.get_extended_weight_vector(self.constant_skill_weights)
-            constant_skill_weights_matrix = torch.squeeze(fill_diag(constant_skill_weights))
-            constant_skill_weights_matrix = torch.unsqueeze(constant_skill_weights_matrix, dim=0)
-            constant_skill_weights_matrix = torch.repeat_interleave(constant_skill_weights_matrix,
-                                                                    repeats=wmat.shape[0], dim=0)
-            updated_wmat = torch.matmul(torch.matmul(torch.transpose(constant_skill_weights_matrix, -1, -2), wmat),
-                                        constant_skill_weights_matrix)
+            constant_skill_weights = self.get_extended_weight_vector(
+                self.constant_skill_weights
+            )
+            constant_skill_weights_matrix = torch.squeeze(
+                fill_diag(constant_skill_weights)
+            )
+            constant_skill_weights_matrix = torch.unsqueeze(
+                constant_skill_weights_matrix, dim=0
+            )
+            constant_skill_weights_matrix = torch.repeat_interleave(
+                constant_skill_weights_matrix, repeats=wmat.shape[0], dim=0
+            )
+            updated_wmat = torch.matmul(
+                torch.matmul(
+                    torch.transpose(constant_skill_weights_matrix, -1, -2), wmat
+                ),
+                constant_skill_weights_matrix,
+            )
         else:
             updated_wmat = wmat
 
         # Calculate Q (the quadratic matrix)
         if smat is None:
             Q = updated_wmat
-            p = - torch.matmul(torch.transpose(svec, -1, -2), updated_wmat)
+            p = -torch.matmul(torch.transpose(svec, -1, -2), updated_wmat)
         else:
             smat = smat.to(device)
-            Q = torch.matmul(torch.matmul(torch.transpose(smat, -1, -2), updated_wmat), smat)
-            p = - torch.matmul(torch.matmul(torch.transpose(svec, -1, -2), updated_wmat), smat)
+            Q = torch.matmul(
+                torch.matmul(torch.transpose(smat, -1, -2), updated_wmat), smat
+            )
+            p = -torch.matmul(
+                torch.matmul(torch.transpose(svec, -1, -2), updated_wmat), smat
+            )
 
         Q = Q + self.eps * torch.eye(Q.shape[1]).to(device)
 
@@ -307,7 +361,9 @@ class SkillDiagonalWeightedPolicy(SkillPolicy):
             p = p.unsqueeze(0)
 
         # Solve the quadratic programming
-        dx = QPFunction(verbose=-1, maxIter=1000)(Q, p, self.ineqn.G, self.ineqn.h, self.eqn.A, self.eqn.b)
+        dx = QPFunction(verbose=-1, maxIter=1000)(
+            Q, p, self.ineqn.G, self.ineqn.h, self.eqn.A, self.eqn.b
+        )
         self.Q = Q
         self.wmat = wmat
 
@@ -322,7 +378,18 @@ class SkillSPDPolicy(SkillPolicy):
     create_spd_matrix method.
     This class serves as basis for the SkillFullyWeightedPolicy.
     """
-    def __init__(self, dim, fdim, skill, eqn=None, ineqn=None, constant_skill_weights=None, eps=1e-10, dt=0.01):
+
+    def __init__(
+        self,
+        dim,
+        fdim,
+        skill,
+        eqn=None,
+        ineqn=None,
+        constant_skill_weights=None,
+        eps=1e-10,
+        dt=0.01,
+    ):
         """
         Initialization of the SkillSPDPolicy class.
 
@@ -338,7 +405,9 @@ class SkillSPDPolicy(SkillPolicy):
         :param eps: regularization value
         :param dt: time step
         """
-        super(SkillSPDPolicy, self).__init__(dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt)
+        super(SkillSPDPolicy, self).__init__(
+            dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt
+        )
         self.QDiagNet = None
         self.QOffDiagNet = None
 
@@ -366,9 +435,9 @@ class SkillSPDPolicy(SkillPolicy):
         :return d_data: diagonal part of the weight matrix
         """
         if self.QDiagNet is None:
-            raise ValueError('QDiagNet should not be None')
+            raise ValueError("QDiagNet should not be None")
         if self.QOffDiagNet is None:
-            raise ValueError('QOffDiagNet should not be None')
+            raise ValueError("QOffDiagNet should not be None")
 
         # Calculate the weight matrix (full)
         d_data = self.QDiagNet(features)
@@ -380,9 +449,19 @@ class SkillSPDPolicy(SkillPolicy):
             d_datas = []
             for i in range(len(self.skill.skill_cluster_idx) - 1):
                 d_datas.append(
-                    nn.Softmax(dim=-1)(d_data[:, self.skill.skill_cluster_idx[i]:self.skill.skill_cluster_idx[i + 1]]))
+                    nn.Softmax(dim=-1)(
+                        d_data[
+                            :,
+                            self.skill.skill_cluster_idx[
+                                i
+                            ] : self.skill.skill_cluster_idx[i + 1],
+                        ]
+                    )
+                )
 
-            d_datas.append(nn.Softmax(dim=-1)(d_data[:, self.skill.skill_cluster_idx[-1]:]))
+            d_datas.append(
+                nn.Softmax(dim=-1)(d_data[:, self.skill.skill_cluster_idx[-1] :])
+            )
             d_data = torch.cat(d_datas, dim=-1)
         else:
             d_data = nn.Softmax(dim=-1)(d_data)
@@ -397,8 +476,12 @@ class SkillSPDPolicy(SkillPolicy):
         if self.constant_skill_weights is not None:
             self.constant_skill_weights = self.constant_skill_weights.to(device)
             constant_skill_weights_matrix = fill_diag(self.constant_skill_weights)
-            updated_wmat = torch.matmul(torch.matmul(torch.transpose(constant_skill_weights_matrix, -1, -2), wmat),
-                                        constant_skill_weights_matrix)
+            updated_wmat = torch.matmul(
+                torch.matmul(
+                    torch.transpose(constant_skill_weights_matrix, -1, -2), wmat
+                ),
+                constant_skill_weights_matrix,
+            )
         else:
             updated_wmat = wmat
 
@@ -408,11 +491,15 @@ class SkillSPDPolicy(SkillPolicy):
 
         svec = svec.to(device)
         if smat is not None:
-            Q = torch.matmul(torch.matmul(torch.transpose(smat, -1, -2), updated_wmat), smat)
-            p = - torch.matmul(torch.matmul(torch.transpose(svec, -1, -2), updated_wmat), smat)
+            Q = torch.matmul(
+                torch.matmul(torch.transpose(smat, -1, -2), updated_wmat), smat
+            )
+            p = -torch.matmul(
+                torch.matmul(torch.transpose(svec, -1, -2), updated_wmat), smat
+            )
         else:
             Q = updated_wmat
-            p = - torch.matmul(torch.transpose(svec, -1, -2), updated_wmat)
+            p = -torch.matmul(torch.transpose(svec, -1, -2), updated_wmat)
 
         Q = Q + self.eps * torch.eye(Q.shape[1]).to(device)
 
@@ -420,7 +507,9 @@ class SkillSPDPolicy(SkillPolicy):
         p = torch.squeeze(p) / self.dt
 
         # Solve the quadratic programming
-        dx = QPFunction(verbose=-1, maxIter=1000)(Q, p, self.ineqn.G, self.ineqn.h, self.eqn.A, self.eqn.b)
+        dx = QPFunction(verbose=-1, maxIter=1000)(
+            Q, p, self.ineqn.G, self.ineqn.h, self.eqn.A, self.eqn.b
+        )
         self.Q = Q
         self.wmat = wmat
         return dx, wmat, d_data
@@ -431,7 +520,18 @@ class SkillFullyWeightedPolicy(SkillSPDPolicy):
     This SkillPolicy-based class sequences and blends skills using a complete SPD weight matrix Q as input for the
     differentiable-optimization layer Optnet.
     """
-    def __init__(self, dim, fdim, skill, eqn=None, ineqn=None, constant_skill_weights=None, eps=1e-10, dt=0.01):
+
+    def __init__(
+        self,
+        dim,
+        fdim,
+        skill,
+        eqn=None,
+        ineqn=None,
+        constant_skill_weights=None,
+        eps=1e-10,
+        dt=0.01,
+    ):
         """
         Initialization of the SkillFullyWeightedPolicy class.
 
@@ -447,11 +547,17 @@ class SkillFullyWeightedPolicy(SkillSPDPolicy):
         :param eps: regularization value
         :param dt: time step
         """
-        super(SkillFullyWeightedPolicy, self).__init__(dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt)
+        super(SkillFullyWeightedPolicy, self).__init__(
+            dim, fdim, skill, eqn, ineqn, constant_skill_weights, eps, dt
+        )
         n_skills = self.skill.n_skills
         total_dim = self.skill.total_dim
         self.QDiagNet = FullyConnectedNet(fdim, n_skills)
-        nb_offdiag_parameters = int(0.5 * (total_dim ** 2 - np.sum(np.array(self.skill.skills_dim) ** 2)) + n_skills - 1)
+        nb_offdiag_parameters = int(
+            0.5 * (total_dim**2 - np.sum(np.array(self.skill.skills_dim) ** 2))
+            + n_skills
+            - 1
+        )
         self.QOffDiagNet = FullyConnectedNet(fdim, nb_offdiag_parameters)
 
     def create_spd_matrix(self, wmat, l_data):
@@ -474,8 +580,12 @@ class SkillFullyWeightedPolicy(SkillSPDPolicy):
         """
         if len(l_data.shape) < 2:
             l_data = torch.unsqueeze(l_data, 0)
-        l_data[:, :self.skill.n_skills - 1] = nn.Sigmoid()(l_data[:, :self.skill.n_skills - 1])
-        l_data[:, self.skill.n_skills - 1:] = nn.Tanh()(l_data[:, self.skill.n_skills - 1:])
+        l_data[:, : self.skill.n_skills - 1] = nn.Sigmoid()(
+            l_data[:, : self.skill.n_skills - 1]
+        )
+        l_data[:, self.skill.n_skills - 1 :] = nn.Tanh()(
+            l_data[:, self.skill.n_skills - 1 :]
+        )
 
         cumsum_dim = np.array([0] + self.skill.skills_dim).cumsum()
         start_param_id = self.skill.n_skills - 1
@@ -484,25 +594,52 @@ class SkillFullyWeightedPolicy(SkillSPDPolicy):
         for i in range(1, self.skill.n_skills):
             end_param_id = end_param_id + cumsum_dim[i] * self.skill.skills_dim[i]
             norm_contraction_matrix = l_data[:, i - 1]
-            contraction_matrix = l_data[:, start_param_id:end_param_id].reshape(-1, cumsum_dim[i], self.skill.skills_dim[i])
-            contraction_matrix = contraction_matrix / torch.linalg.norm(contraction_matrix, dim=(-2, -1))[:, None, None]
-            contraction_matrix = contraction_matrix * norm_contraction_matrix[:, None, None]
-            left_top_matrix = wmat[:, :cumsum_dim[i], :cumsum_dim[i]].detach()
-            right_bottom_matrix = wmat[:, cumsum_dim[i]:cumsum_dim[i + 1], cumsum_dim[i]:cumsum_dim[i + 1]].detach()
+            contraction_matrix = l_data[:, start_param_id:end_param_id].reshape(
+                -1, cumsum_dim[i], self.skill.skills_dim[i]
+            )
+            contraction_matrix = (
+                contraction_matrix
+                / torch.linalg.norm(contraction_matrix, dim=(-2, -1))[:, None, None]
+            )
+            contraction_matrix = (
+                contraction_matrix * norm_contraction_matrix[:, None, None]
+            )
+            left_top_matrix = wmat[:, : cumsum_dim[i], : cumsum_dim[i]].detach()
+            right_bottom_matrix = wmat[
+                :, cumsum_dim[i] : cumsum_dim[i + 1], cumsum_dim[i] : cumsum_dim[i + 1]
+            ].detach()
             sqrt_left_top_matrix = sqrtm_torch(left_top_matrix)
-            sqrt_right_bottom_matrix = torch.sqrt(right_bottom_matrix)  # assume a diagonal matrix here
-            off_diagonal_matrix = torch.matmul(torch.matmul(sqrt_left_top_matrix, contraction_matrix),
-                                               sqrt_right_bottom_matrix)
-            wmat[:, 0:cumsum_dim[i], cumsum_dim[i]:cumsum_dim[i] + self.skill.skills_dim[i]] = off_diagonal_matrix
-            wmat[:, cumsum_dim[i]:cumsum_dim[i] + self.skill.skills_dim[i],
-            0:cumsum_dim[i]] = off_diagonal_matrix.transpose(-2, -1)
+            sqrt_right_bottom_matrix = torch.sqrt(
+                right_bottom_matrix
+            )  # assume a diagonal matrix here
+            off_diagonal_matrix = torch.matmul(
+                torch.matmul(sqrt_left_top_matrix, contraction_matrix),
+                sqrt_right_bottom_matrix,
+            )
+            wmat[
+                :,
+                0 : cumsum_dim[i],
+                cumsum_dim[i] : cumsum_dim[i] + self.skill.skills_dim[i],
+            ] = off_diagonal_matrix
+            wmat[
+                :,
+                cumsum_dim[i] : cumsum_dim[i] + self.skill.skills_dim[i],
+                0 : cumsum_dim[i],
+            ] = off_diagonal_matrix.transpose(-2, -1)
             start_param_id = end_param_id
 
         wmat = torch.squeeze(wmat)
         return wmat
 
-    def spec_train(self, dataloader, model_path, loss_weights=None, learning_rate=0.001, max_epochs=500,
-                   proportional=0.2):
+    def spec_train(
+        self,
+        dataloader,
+        model_path,
+        loss_weights=None,
+        learning_rate=0.001,
+        max_epochs=500,
+        proportional=0.2,
+    ):
         """
         This function trains a fully-weighted policy in a hierarchical manner. First, the fully connected layer
         corresponding to the diagonal of the weight matrix is trained (similarly as a SkillDiagonalPolicy class). The
@@ -526,24 +663,46 @@ class SkillFullyWeightedPolicy(SkillSPDPolicy):
         :return: trained policy
         """
 
-        policy = SkillDiagonalWeightedPolicy(self.dim, self.fdim, self.skill, eqn=self.eqn, ineqn=self.ineqn)
-        print('Pretrain: training SkillDiagonalWeightedPolicy')
+        policy = SkillDiagonalWeightedPolicy(
+            self.dim, self.fdim, self.skill, eqn=self.eqn, ineqn=self.ineqn
+        )
+        print("Pretrain: training SkillDiagonalWeightedPolicy")
         pretrain_epochs = int(proportional * max_epochs)
-        policy = train_policy(policy, dataloader, model_path, loss_weights=loss_weights,
-                              learning_rate=learning_rate, max_epochs=pretrain_epochs,
-                              consider_spec_train=False)
+        policy = train_policy(
+            policy,
+            dataloader,
+            model_path,
+            loss_weights=loss_weights,
+            learning_rate=learning_rate,
+            max_epochs=pretrain_epochs,
+            consider_spec_train=False,
+        )
         self.QDiagNet = policy.Qnet
 
         if max_epochs - pretrain_epochs == 0:
             return self
         else:
-            return train_policy(self, dataloader, model_path, loss_weights=loss_weights,
-                                learning_rate=learning_rate, max_epochs=max_epochs-pretrain_epochs,
-                                consider_spec_train=False)
+            return train_policy(
+                self,
+                dataloader,
+                model_path,
+                loss_weights=loss_weights,
+                learning_rate=learning_rate,
+                max_epochs=max_epochs - pretrain_epochs,
+                consider_spec_train=False,
+            )
 
 
-def train_policy(policy, dataloader, model_path, spec_train_proportional=0.2, loss_weights=None, learning_rate=0.001,
-                 max_epochs=500, consider_spec_train=True):
+def train_policy(
+    policy,
+    dataloader,
+    model_path,
+    spec_train_proportional=0.2,
+    loss_weights=None,
+    learning_rate=0.001,
+    max_epochs=500,
+    consider_spec_train=True,
+):
     """
     This function trains the parameters of a SkillPolicy. Namely, it trains the parameters of the network(s) used to
     compute the weight matrix, which are then given as inputs to the Optnet layer.
@@ -563,13 +722,28 @@ def train_policy(policy, dataloader, model_path, spec_train_proportional=0.2, lo
     :return: trained policy
     """
 
-    if consider_spec_train and hasattr(policy, 'spec_train') and callable(policy.spec_train):
-        return policy.spec_train(dataloader, model_path, loss_weights, learning_rate, max_epochs,
-                                 spec_train_proportional)
+    if (
+        consider_spec_train
+        and hasattr(policy, "spec_train")
+        and callable(policy.spec_train)
+    ):
+        return policy.spec_train(
+            dataloader,
+            model_path,
+            loss_weights,
+            learning_rate,
+            max_epochs,
+            spec_train_proportional,
+        )
 
     opt = optim.Adam(policy.parameters(), lr=learning_rate)
-    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(opt, patience=10000, verbose=False, min_lr=1e-5)
-    loss_weights_ = [[loss_weights[i]] * policy.skill.skills[i].dim() for i in range(len(policy.skill.skills))]
+    lr_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        opt, patience=10000, verbose=False, min_lr=1e-5
+    )
+    loss_weights_ = [
+        [loss_weights[i]] * policy.skill.skills[i].dim()
+        for i in range(len(policy.skill.skills))
+    ]
     loss_weights_ = [item for sublist in loss_weights_ for item in sublist]
     loss_weights_ = torch.tensor(loss_weights_, dtype=torch.float64)
     loss_weights_ = loss_weights_.to(device)
@@ -579,7 +753,7 @@ def train_policy(policy, dataloader, model_path, spec_train_proportional=0.2, lo
     for epoch in range(max_epochs):
         eloss = 0
         count = 0
-        
+
         # import time
         # start = time.time()
         for i, (feat, xt, dxt, desired_) in enumerate(dataloader):
@@ -609,7 +783,7 @@ def train_policy(policy, dataloader, model_path, spec_train_proportional=0.2, lo
             dxt = dxt.to(device)
             desired_ = desired_.to(device)
             dxt_, wmat, ldata = policy.forward(feat, xt, desired_)
-            
+
             loss = qp_loss(dxt_, dxt, wmat, loss_weights_)
 
             loss.backward()
@@ -623,9 +797,13 @@ def train_policy(policy, dataloader, model_path, spec_train_proportional=0.2, lo
 
         cost = eloss / count
         lr_scheduler.step(cost)
-        print('epoch: %1d / %1d, loss: %.10f, lr: %.10f' % (epoch, max_epochs, cost, opt.param_groups[0]['lr']), end='\r')
+        print(
+            "epoch: %1d / %1d, loss: %.10f, lr: %.10f"
+            % (epoch, max_epochs, cost, opt.param_groups[0]["lr"]),
+            end="\r",
+        )
 
-    print('epoch: %1d, loss: %.10f,  lr: %.10f' % (epoch, cost, opt.param_groups[0]['lr']))
+    print(
+        "epoch: %1d, loss: %.10f,  lr: %.10f" % (epoch, cost, opt.param_groups[0]["lr"])
+    )
     return policy
-
-

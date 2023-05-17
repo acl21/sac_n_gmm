@@ -8,8 +8,8 @@ from SkillsRefining.utils.utils import prepare_torch
 
 device = prepare_torch()
 
-plt.rcParams['text.usetex'] = False
-plt.rcParams['text.latex.preamble'] = r'\usepackage{bm}'
+plt.rcParams["text.usetex"] = False
+plt.rcParams["text.latex.preamble"] = r"\usepackage{bm}"
 matplotlib.rc_file_defaults()
 
 
@@ -17,6 +17,7 @@ class Gripper2DExp:
     """
     This class defines a pick and place experiment for a planar robot with a gripper.
     """
+
     def __init__(self, skill_list, skill_fcns, gripper):
         """
         Initialization of the experiment class.
@@ -45,10 +46,10 @@ class Gripper2DExp:
         :return: -
         """
         nb_dofs = self.gripper.total_links
-        self.demo_log['qt'] = None
-        self.demo_log['dqt'] = None
-        self.demo_log['K'] = self.demo_log['K'][0, 0] * np.eye(nb_dofs)
-        self.demo_log['q0'] = q0
+        self.demo_log["qt"] = None
+        self.demo_log["dqt"] = None
+        self.demo_log["K"] = self.demo_log["K"][0, 0] * np.eye(nb_dofs)
+        self.demo_log["q0"] = q0
 
     def get_taskspace_training_data(self, fname):
         """
@@ -72,19 +73,21 @@ class Gripper2DExp:
         self.demo_log = dict(demo_log)
 
         if self.demo_log is None:
-            raise ValueError('Please generate demo first')
+            raise ValueError("Please generate demo first")
 
-        traj = self.demo_log['xpt']
+        traj = self.demo_log["xpt"]
         for i in range(len(self.skill_list)):
-            desired_value = np.stack([self.skill_fcns[i](traj[t, :2]) for t in np.arange(0, traj.shape[0])])
+            desired_value = np.stack(
+                [self.skill_fcns[i](traj[t, :2]) for t in np.arange(0, traj.shape[0])]
+            )
             self.skill_list[i].update_desired_value(desired_value)
 
         # Prepare training data
-        qt_d = self.demo_log['qt']
-        xpt_d = self.demo_log['xpt']
-        xot_d = self.demo_log['xot']
-        K = self.demo_log['K'][0,0]
-        dt = self.demo_log['dt']
+        qt_d = self.demo_log["qt"]
+        xpt_d = self.demo_log["xpt"]
+        xot_d = self.demo_log["xot"]
+        K = self.demo_log["K"][0, 0]
+        dt = self.demo_log["dt"]
 
         dqt_d = (qt_d[1:, :] - qt_d[:-1, :]) / (K * dt)
         dxpt_d = (xpt_d[1:, :] - xpt_d[:-1, :]) / (K * dt)
@@ -97,14 +100,14 @@ class Gripper2DExp:
         ctrl_idx = []
         for skill in self.skill_list:
             n_added = 0
-            if skill.name in {'pick', 'place'}:
+            if skill.name in {"pick", "place"}:
                 cxt = np.concatenate([xpt_d, xot_d], axis=-1)
                 xt.append(cxt)
                 dxt.append(np.concatenate([dxpt_d, dxot_d], axis=-1))
                 desired_.append(skill.desired_value)
                 n_added = cxt.shape[-1]
                 ctrl_idx.append(0)
-            if skill.name in {'open', 'close'}:
+            if skill.name in {"open", "close"}:
                 qtx = qt_d[:, 4:]
                 qtx_d = dqt_d[:, 4:]
                 xt.append(qtx)
@@ -121,8 +124,17 @@ class Gripper2DExp:
         dxt_d = np.hstack(dxt)
         return self.skill_list, xt_d, dxt_d, desired_, ctrl_idx
 
-    def test_policy(self, policy, pick_goal, place_goal, is_plot=False, fname=None, is_plot_robot=False,
-                    joint_position_limits=None, joint_velocity_limits=None):
+    def test_policy(
+        self,
+        policy,
+        pick_goal,
+        place_goal,
+        is_plot=False,
+        fname=None,
+        is_plot_robot=False,
+        joint_position_limits=None,
+        joint_velocity_limits=None,
+    ):
         """
         Test a given policy. The robot is controlled in joint space.
 
@@ -145,7 +157,9 @@ class Gripper2DExp:
         :return: resulting trajectory
         """
         if self.demo_log is None and fname is None:
-            raise ValueError('Please generate demo first or give the demo log filename (.npz)')
+            raise ValueError(
+                "Please generate demo first or give the demo log filename (.npz)"
+            )
 
         nb_dofs = self.gripper.total_links
         if fname is not None:
@@ -157,40 +171,56 @@ class Gripper2DExp:
         if joint_velocity_limits is None:
             joint_velocity_limits = 10.0
 
-        joint_angle_constraint = JointAngleLimitsConstraint(nb_dofs, joint_position_limits, -joint_position_limits)
-        joint_velocity_constraint = JointVelocityLimitsConstraint(nb_dofs, joint_velocity_limits,
-                                                                  -joint_velocity_limits)
+        joint_angle_constraint = JointAngleLimitsConstraint(
+            nb_dofs, joint_position_limits, -joint_position_limits
+        )
+        joint_velocity_constraint = JointVelocityLimitsConstraint(
+            nb_dofs, joint_velocity_limits, -joint_velocity_limits
+        )
 
-        ineqn = ListIneqnConstraints([joint_angle_constraint, joint_velocity_constraint])
+        ineqn = ListIneqnConstraints(
+            [joint_angle_constraint, joint_velocity_constraint]
+        )
 
         joint_space_policy = policy
         joint_space_policy.ineqn = ineqn
         joint_space_policy.eqn = EqnConstraint()
 
-        qt = self.demo_log['q0']
-        timesteps = self.demo_log['timesteps']
-        xpt_track = self.demo_log['xpt']
+        qt = self.demo_log["q0"]
+        timesteps = self.demo_log["timesteps"]
+        xpt_track = self.demo_log["xpt"]
         timestamps = np.linspace(0, 1, timesteps)
 
         qt_track = np.zeros((timesteps, nb_dofs))
         dqt_track = np.zeros((timesteps, nb_dofs))
         xt_track = np.zeros((timesteps, 4))
         dxt_track = np.zeros((timesteps, 4))
-        wmat_track = np.zeros((timesteps, sum([skill.dim() for skill in self.skill_list])))
-        wmat_full_track = np.zeros((timesteps,
-                                    sum([skill.dim() for skill in self.skill_list]),
-                                    sum([skill.dim() for skill in self.skill_list])))
+        wmat_track = np.zeros(
+            (timesteps, sum([skill.dim() for skill in self.skill_list]))
+        )
+        wmat_full_track = np.zeros(
+            (
+                timesteps,
+                sum([skill.dim() for skill in self.skill_list]),
+                sum([skill.dim() for skill in self.skill_list]),
+            )
+        )
 
-        print('testing phase: start generating trajectory ...')
+        print("testing phase: start generating trajectory ...")
 
         for i in range(timesteps):
-            print('timestamp %1d / %1d' % (i, timesteps), end='\r')
-            xt = self.gripper.arm_position_fct(np.expand_dims(qt,axis=0))
-            [self.skill_list[si].update_desired_value(self.skill_fcns[si](xt[:2])) for si in range(len(self.skill_list))]
+            print("timestamp %1d / %1d" % (i, timesteps), end="\r")
+            xt = self.gripper.arm_position_fct(np.expand_dims(qt, axis=0))
+            [
+                self.skill_list[si].update_desired_value(self.skill_fcns[si](xt[:2]))
+                for si in range(len(self.skill_list))
+            ]
 
             desired_ = []
             for skill in self.skill_list:
-                desired_value = torch.from_numpy(skill.desired_value).double().to(device)
+                desired_value = (
+                    torch.from_numpy(skill.desired_value).double().to(device)
+                )
                 desired_.append(desired_value)
 
             desired_ = torch.cat(desired_, dim=-1)
@@ -200,7 +230,11 @@ class Gripper2DExp:
 
             joint_space_policy.ineqn.update(qt_input)
             dq, wmat, ddata = joint_space_policy.forward(feat, qt_input, desired_)
-            dq = dq.detach().cpu().numpy()[0, :] * self.demo_log['K'][0, 0] * self.demo_log['dt']
+            dq = (
+                dq.detach().cpu().numpy()[0, :]
+                * self.demo_log["K"][0, 0]
+                * self.demo_log["dt"]
+            )
             dqt_track[i, :] = dq
             qt = qt + dq
             qt_track[i, :] = qt
@@ -208,28 +242,44 @@ class Gripper2DExp:
             wmat_full_track[i, :, :] = wmat.detach().cpu().numpy()
             xt_track[i, :] = self.gripper.compute_ts_arm_fct(qt[np.newaxis, :])
 
-        res = {'xt_track': xt_track,
-               'qt_track': qt_track,
-               'dxt_track': dxt_track,
-               'dqt_track': dqt_track,
-               'wmat_track': wmat_track}
+        res = {
+            "xt_track": xt_track,
+            "qt_track": qt_track,
+            "dxt_track": dxt_track,
+            "dqt_track": dqt_track,
+            "wmat_track": wmat_track,
+        }
 
         if is_plot_robot:
             plt.figure(figsize=(10, 10))
             ax = plt.gca()
-            color = 'darkblue'
+            color = "darkblue"
             while True:
                 plt.pause(0.01)
                 if plt.waitforbuttonpress():
                     break
 
-            ax.plot(pick_goal[0], pick_goal[1], '.', color=[223 / 255, 155 / 255, 27 / 255, 0.8], markersize=60)
-            ax.plot(place_goal[0], place_goal[1], '.', color=[162/255, 34/255, 35/255, 0.8], markersize=60)
-            ax.plot(xpt_track[:, 0], xpt_track[:, 1], '-.', color=[0, 0, 0, 1], linewidth=2)
+            ax.plot(
+                pick_goal[0],
+                pick_goal[1],
+                ".",
+                color=[223 / 255, 155 / 255, 27 / 255, 0.8],
+                markersize=60,
+            )
+            ax.plot(
+                place_goal[0],
+                place_goal[1],
+                ".",
+                color=[162 / 255, 34 / 255, 35 / 255, 0.8],
+                markersize=60,
+            )
+            ax.plot(
+                xpt_track[:, 0], xpt_track[:, 1], "-.", color=[0, 0, 0, 1], linewidth=2
+            )
 
             patches_list = []
             for i in range(0, timesteps, 1):
-                print('timestamp %1d / %1d' % (i, timesteps), end='\r')
+                print("timestamp %1d / %1d" % (i, timesteps), end="\r")
                 if patches_list:
                     for patches in patches_list:
                         for patch in patches:
@@ -239,7 +289,13 @@ class Gripper2DExp:
                 ax.axes.yaxis.set_ticks([])
                 plt.xlim(-20, 20)
                 plt.ylim(-20, 20)
-                plt.plot(xt_track[:i, 0], xt_track[:i, 1], '-',  color='steelblue', linewidth=2)
+                plt.plot(
+                    xt_track[:i, 0],
+                    xt_track[:i, 1],
+                    "-",
+                    color="steelblue",
+                    linewidth=2,
+                )
                 plt.pause(0.01)
 
             # plt.show()
@@ -274,19 +330,31 @@ class Gripper2DExp:
 
             # Weight comparison
             matplotlib.rc_file_defaults()
-            wmat_d = self.demo_log['wtraj']
+            wmat_d = self.demo_log["wtraj"]
             track_ind = 0
             for i in range(len(self.skill_list)):
                 plt.figure(figsize=(10, 5))
-                plt.plot(np.linspace(0, 1, wmat_d.shape[0]), wmat_d[:, i], 'k-.', linewidth=2, label='desired')
-                plt.plot(np.linspace(0, 1, wmat_track.shape[0]), wmat_track[:, track_ind], color=(162/255, 34/255, 35/255),
-                         linestyle='-', linewidth=2, label='generated')
-                plt.xlabel(r'$s$', fontsize=32)
+                plt.plot(
+                    np.linspace(0, 1, wmat_d.shape[0]),
+                    wmat_d[:, i],
+                    "k-.",
+                    linewidth=2,
+                    label="desired",
+                )
+                plt.plot(
+                    np.linspace(0, 1, wmat_track.shape[0]),
+                    wmat_track[:, track_ind],
+                    color=(162 / 255, 34 / 255, 35 / 255),
+                    linestyle="-",
+                    linewidth=2,
+                    label="generated",
+                )
+                plt.xlabel(r"$s$", fontsize=32)
                 skill_name = self.skill_list[i].name
-                plt.ylabel(r'$w_{%s}$' % skill_name, fontsize=32)
+                plt.ylabel(r"$w_{%s}$" % skill_name, fontsize=32)
                 # plt.tight_layout()
-                plt.locator_params(axis='x', nbins=3)
-                plt.locator_params(axis='y', nbins=3)
+                plt.locator_params(axis="x", nbins=3)
+                plt.locator_params(axis="y", nbins=3)
                 plt.xticks(fontsize=26)
                 plt.yticks(fontsize=26)
 
