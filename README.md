@@ -9,7 +9,7 @@ However, install the following from their respective sources:
 * PyTorch and TorchVision from their [official website](https://pytorch.org/). 
 * `calvin_env` dependencies from [their repo](https://github.com/mees/calvin_env).
 
-## CALVINExperimentp
+## CALVINExperiment
 
 ### Step 0: Download CALVIN dataset
 Download the [CALVIN dataset](https://github.com/mees/calvin) and place it inside [data/](./examples/CALVINExperiment/data/). 
@@ -34,10 +34,10 @@ Configure [config/eval_ds.yaml](./examples/CALVINExperiment/config/eval_ds.yaml)
 ```
 
 ### Step 3: Train RL Agent
-Configure [config/seqblend_rl.yaml](./examples/CALVINExperiment/config/seqblend_rl.yaml) and relevant default configs.
+Configure [config/seqblend_rl.yaml](./examples/CALVINExperiment/config/seqblend_rl.yaml).
 ```
-> cd examples/CALVINExperiment/seqblend/
-> python seqblend_rl.py
+> cd examples/CALVINExperiment/
+> python seqblend/seqblend_rl.py
 ```
 
 ## Reference
