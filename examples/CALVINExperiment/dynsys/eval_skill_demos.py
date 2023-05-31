@@ -30,9 +30,7 @@ class SkillEvaluatorDemos(object):
     def __init__(self, cfg, env):
         self.cfg = cfg
         self.env = env
-        f = open(cfg.skills_to_eval, "r")
-        skill_set = f.read()
-        self.skill_set = skill_set.split("\n")
+        self.skill = self.cfg.skill
         self.logger = logging.getLogger("SkillEvaluatorDemos")
 
     def evaluate(
@@ -63,10 +61,7 @@ class SkillEvaluatorDemos(object):
                 count += 1
                 if count >= 200:
                     self.logger.info(
-                        "CALVIN is struggling to place the EE at the right initial pose"
-                    )
-                    self.logger.info(
-                        x0, current_state, np.linalg.norm(current_state - x0)
+                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.linalg.norm(current_state - x0)}"
                     )
                     break
             # self.logger.info(f'Simulating with Data')
@@ -128,54 +123,42 @@ class SkillEvaluatorDemos(object):
         return acc, np.mean(rollout_returns), np.mean(rollout_lengths)
 
     def run(self):
-        skill_accs = {}
-        for skill in self.skill_set:
-            if self.cfg.wandb:
-                config = {
-                    "state_type": self.cfg.state_type,
-                    "sampling_dt": self.cfg.sampling_dt,
-                    "max steps": self.cfg.max_steps,
-                }
-                wandb.init(
-                    project="ds-evaluation-demos",
-                    entity="in-ac",
-                    config=config,
-                    name=f"{skill}_{self.cfg.state_type}",
-                )
-
-            self.env.set_skill(skill)
-
-            # Get validation dataset
-            self.cfg.dataset.skill = skill
-            val_dataset = hydra.utils.instantiate(self.cfg.dataset)
-
-            self.logger.info(
-                f"Evaluating {skill} skill with {self.cfg.state_type} input on CALVIN environment"
+        if self.cfg.wandb:
+            config = {
+                "state_type": self.cfg.state_type,
+                "sampling_dt": self.cfg.dt,
+                "max steps": self.cfg.max_steps,
+            }
+            wandb.init(
+                project="ds-evaluation-demos",
+                entity="in-ac",
+                config=config,
+                name=f"{self.skill}_{self.cfg.state_type}",
             )
-            self.logger.info(f"Test/Val Data: {val_dataset.X.size()}")
-            # Evaluate demos by simulating in the CALVIN environment
-            acc, avg_return, avg_len = self.evaluate(
-                val_dataset,
-                max_steps=self.cfg.max_steps,
-                render=self.cfg.render,
-                record=self.cfg.record,
-                sampling_dt=self.cfg.sampling_dt,
-            )
-            skill_accs[skill] = [str(acc), str(avg_return), str(avg_len)]
-            self.env.count = 0
-            if self.cfg.wandb:
-                wandb.finish()
-            # Log evaluation output
-            self.logger.info(f"{skill} Demos Accuracy: {round(acc, 2)}")
 
-        # Write accuracies to a file
-        with open(
-            os.path.join(self.env.outdir, f"skill_ds_acc_{self.cfg.state_type}.txt"),
-            "w",
-        ) as f:
-            writer = csv.writer(f)
-            for row in skill_accs.items():
-                writer.writerow(row)
+        self.env.set_skill(self.skill)
+
+        # Get validation dataset
+        self.cfg.dataset.skill = self.skill
+        val_dataset = hydra.utils.instantiate(self.cfg.dataset)
+
+        self.logger.info(
+            f"Evaluating {self.skill} skill with {self.cfg.state_type} input on CALVIN environment"
+        )
+        self.logger.info(f"Test/Val Data: {val_dataset.X.size()}")
+        # Evaluate demos by simulating in the CALVIN environment
+        acc, avg_return, avg_len = self.evaluate(
+            val_dataset,
+            max_steps=self.cfg.max_steps,
+            render=self.cfg.render,
+            record=self.cfg.record,
+            sampling_dt=self.cfg.sampling_dt,
+        )
+        self.env.count = 0
+        if self.cfg.wandb:
+            wandb.finish()
+        # Log evaluation output
+        self.logger.info(f"{self.skill} Demos Accuracy: {round(acc, 2)}")
 
 
 @hydra.main(version_base="1.1", config_path="../config", config_name="eval_ds")

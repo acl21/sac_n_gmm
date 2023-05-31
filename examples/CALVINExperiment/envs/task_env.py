@@ -13,7 +13,7 @@ from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import 
 class TaskSpecificEnv(PlayTableSimEnv):
     def __init__(self, tasks={}, target_tasks=[], sequential=True, **kwargs):
         super(TaskSpecificEnv, self).__init__(**kwargs)
-        self.action_space = spaces.Box(low=0, high=1, shape=(len(target_tasks),))
+        self.action_space = spaces.Box(low=0, high=1, shape=(1,))
         self.observation_space = spaces.Box(low=-1, high=1, shape=(15,))
         self.tasks = hydra.utils.instantiate(tasks)
         self.target_tasks = target_tasks
@@ -23,6 +23,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.state_type = "pos"
         self.frames = []
         self._max_episode_steps = 0
+        self.subgoal_reached = False
 
     def _success(self):
         """
@@ -56,13 +57,17 @@ class TaskSpecificEnv(PlayTableSimEnv):
                 return True
             else:
                 next_task = self.tasks_to_complete[0]
+                self.subgoal_reached = True
 
         return len(self.tasks_to_complete) == 0
 
     def _reward(self):
         """Returns the reward function that will be used
         for the RL algorithm"""
-        reward = int(self._success()) * 10
+        reward = int(self._success())
+        if self.subgoal_reached:
+            reward += 1
+            self.subgoal_reached = False
         r_info = {"reward": reward}
         return reward, r_info
 
@@ -114,11 +119,17 @@ class TaskSpecificEnv(PlayTableSimEnv):
     def get_obs(self):
         """Overwrite robot obs to only retrieve end effector position"""
         robot_obs, robot_info = self.robot.get_observation()
-        return robot_obs
+        if self.state_type == "pos":
+            return robot_obs[:3]
+        else:
+            return robot_obs
 
     def reset(self):
         obs = super().reset()
         self.start_info = self.get_info()
+        self.tasks_to_complete = copy.deepcopy(self.target_tasks)
+        self.completed_tasks_so_far = []
+        self.reset_recorded_frames()
         return obs
 
     def get_camera_obs(self):
@@ -148,7 +159,8 @@ class TaskSpecificEnv(PlayTableSimEnv):
 
     def save_recorded_frames(self, outdir, fname):
         """Save recorded frames as a video"""
-        fname = f"{fname}.mp4"
+        fname = f"{fname}.gif"
+        kargs = {"fps": 30}
         fpath = os.path.join(outdir, fname)
-        imageio.mimsave(fpath, self.frames, fps=30)
+        imageio.mimsave(fpath, self.frames, "GIF", **kargs)
         return fpath

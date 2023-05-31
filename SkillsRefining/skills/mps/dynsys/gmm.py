@@ -116,6 +116,9 @@ class ManifoldGMM(object):
             logger=self.logger,
         )
 
+        # Reshape means from (n_components, 2) to (n_components, 2, state_size)
+        self.means = self.get_reshaped_means()
+
         # Save GMM params
         self.save_params()
 
@@ -145,6 +148,14 @@ class ManifoldGMM(object):
             x.reshape(1, -1), self.manifold, self.means, self.covariances, self.priors
         )
         return dx
+
+    def get_reshaped_means(self):
+        """Reshape means from (n_comp, 2) to (n_comp, 2, state_size)"""
+        new_means = np.empty((self.n_comp, 2, self.dim))
+        for i in range(new_means.shape[0]):
+            for j in range(new_means.shape[1]):
+                new_means[i, j, :] = self.means[i][j]
+        return new_means
 
     def plot_gmm_mlab(self, input_space=True):
         from mayavi import mlab
@@ -192,31 +203,19 @@ class ManifoldGMM(object):
         mlab.show()
 
     def plot_gmm(self):
+        means = self.means
+
         # Pick 15 random datapoints from X to plot
-        rand_idx = np.random.choice(
-            np.arange(1, len(self.dataset.X)), size=15, replace=False, p=None
-        )
-        plot_data = self.dataset.X[rand_idx[0]].numpy()
-        for i in rand_idx[1:]:
-            plot_data = np.vstack([plot_data, self.dataset.X[i].numpy()])
-
-        plot_means = np.empty((self.n_comp, 3))
-        for i in range(plot_means.shape[0]):
-            for j in range(plot_means.shape[1]):
-                plot_means[i, j] = self.means[i, 0][j]
-
-        temp = self.covariances[:, : self.dim, : self.dim]
-        plot_covariances = np.empty((self.n_comp, 3))
-        for i in range(plot_covariances.shape[0]):
-            for j in range(plot_covariances.shape[1]):
-                plot_covariances[i, j] = temp[i][j, j]
+        points = self.dataset.X.numpy()[:, :, :3]
+        rand_idx = np.random.choice(np.arange(0, len(points)), size=15)
+        points = np.vstack(points[rand_idx, :, :])
+        means = np.vstack(self.means[:, 0])
+        covariances = self.covariances[:, :3, :3]
 
         return visualize_3d_gmm(
-            points=plot_data,
-            w=self.priors,
-            mu=plot_means.T,
-            stdev=plot_covariances.T,
-            skill=self.dataset.skill,
-            export_dir=self.skills_dir,
-            export_type="gif",
+            points=points,
+            priors=self.priors,
+            means=means,
+            covariances=covariances,
+            save_dir=self.skills_dir,
         )

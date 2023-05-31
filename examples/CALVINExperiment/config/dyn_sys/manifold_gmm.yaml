@@ -1,4 +1,4 @@
 _target_:  SkillsRefining.skills.mps.dynsys.gmm.ManifoldGMM
-_recursive_: true
+_recursive_: false
 n_components: ${gmm_components}
 plot: ${plot}

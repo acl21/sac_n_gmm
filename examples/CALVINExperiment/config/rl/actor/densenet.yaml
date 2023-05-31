@@ -1,0 +1,6 @@
+_target_: examples.CALVINExperiment.rl.networks.actors.densenet.DenseNetActor
+input_dim: ${rl.input_dim}
+action_dim: ${rl.action_dim}
+hidden_depth: 2
+hidden_dim: 256
+init_w: 1e-3

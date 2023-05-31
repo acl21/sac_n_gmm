@@ -1,0 +1,4 @@
+_target_: examples.CALVINExperiment.rl.networks.critics.densenet.DenseNetCritic
+input_dim: ${rl.input_dim}
+hidden_depth: 2
+hidden_dim: 256

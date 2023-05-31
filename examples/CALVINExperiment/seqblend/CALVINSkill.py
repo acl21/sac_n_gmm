@@ -39,6 +39,7 @@ class CALVINSkill:
             goal_centered=False,
             normalized=False,
             demos_dir=demos_dir,
+            dt=0.0666,
         )
         self.goal = self.dataset.goal
         self.desired_value = None
@@ -66,7 +67,7 @@ class CALVINSkill:
             self.covariances,
             self.priors,
         )
-        return dx[0]
+        return dx
 
     def update_desired_value(self, desired_value, use_state_idx=False):
         if len(desired_value.shape) < 2:
@@ -91,6 +92,33 @@ class CALVINSkill:
 
     def dim(self):
         return self.dim_
+
+    def sample_start(self, size=1, sigma=0.15):
+        start = self.dataset.start
+        sampled = self.sample_gaussian_norm_ball(start, sigma, size)
+        if size == 1:
+            return sampled[0]
+        else:
+            return sampled
+
+    def sample_gaussian_norm_ball(self, reference_point, sigma, num_samples):
+        samples = []
+        for _ in range(num_samples):
+            # Step 1: Sample from standard Gaussian distribution
+            offset = np.random.randn(3)
+
+            # Step 2: Normalize the offset
+            normalized_offset = offset / np.linalg.norm(offset)
+
+            # Step 3: Scale the normalized offset
+            scaled_offset = normalized_offset * np.random.normal(0, sigma)
+
+            # Step 4: Translate the offset
+            sampled_point = reference_point + scaled_offset
+
+            samples.append(sampled_point)
+
+        return samples
 
 
 class CALVINSkillComplex:

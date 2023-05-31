@@ -1,0 +1,18 @@
+defaults:
+  - dataset: calvin_ds # calvin_task to evaluate task demos
+  - dyn_sys: manifold_gmm # clfds or manifold_gmm
+  - _self_
+
+  - override hydra/job_logging: colorlog
+  - override hydra/hydra_logging: colorlog
+
+seed: 42
+slurm: false
+device: cuda
+
+developer: lagandua
+
+root: /home/${developer}/projects/refining-skill-sequences
+log_dir: ${root}/examples/CALVINExperiment/logs
+demos_dir: ${root}/examples/CALVINExperiment/data/demos
+exp_dir: null

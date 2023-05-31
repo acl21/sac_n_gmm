@@ -1,0 +1,6 @@
+comment: ""
+wandb:
+  entity: in-ac
+  project: seqblend-rl
+  developer: ${developer}
+  comment: ${comment}

@@ -1,0 +1,22 @@
+# Skill params
+skills_dir: ${root}/examples/CALVINExperiment/skills_ds2
+state_type: 'pos'
+dim: 3
+
+
+# Dataset params:
+skill: null
+train: true # false to load validation dataset
+goal_centered: true # this must be false during evaluation
+dt: 0.0666
+sampling_dt: 0.0333
+normalized: false
+is_quaternion: false
+
+# Evaluation and DS params
+max_steps: 240
+
+# GMM params
+gmm_components: 6
+plot: true
+gmm_input_size: ${dim}

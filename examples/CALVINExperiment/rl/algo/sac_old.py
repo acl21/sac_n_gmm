@@ -3,13 +3,13 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from examples.CALVINExperiment.rl.agent import Agent
+from examples.CALVINExperiment.rl.algo import Agent
 import examples.CALVINExperiment.rl.utils as utils
 
 import hydra
 
 
-class SACAgent(Agent):
+class SACAgentOld(Agent):
     """SAC algorithm."""
 
     def __init__(
@@ -86,7 +86,7 @@ class SACAgent(Agent):
         obs = obs.unsqueeze(0)
         dist = self.actor(obs.float())
         action = dist.sample() if sample else dist.mean
-        action = torch.nn.Softmax(dim=-1)(action)
+        # action = torch.nn.Softmax(dim=-1)(action)
         action = action.clamp(*self.action_range)
         assert action.ndim == 2 and action.shape[0] == 1
         return utils.to_np(action[0])
@@ -115,7 +115,7 @@ class SACAgent(Agent):
     def update_actor_and_alpha(self, obs, logger):
         dist = self.actor(obs)
         action = dist.rsample()
-        action = torch.nn.Softmax(dim=-1)(action)
+        # action = torch.nn.Softmax(dim=-1)(action)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
         actor_Q1, actor_Q2 = self.critic(obs, action)
 

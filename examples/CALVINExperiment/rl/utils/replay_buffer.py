@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+import os
 
 
 class ReplayBuffer(object):
@@ -18,26 +19,25 @@ class ReplayBuffer(object):
         obs_dtype = np.float32 if len(obs_shape) == 1 else np.uint8
 
         self.obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
-        self.not_dones = np.empty((capacity, 1), dtype=np.float32)
-        self.not_dones_no_max = np.empty((capacity, 1), dtype=np.float32)
+        self.next_obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
+        self.dones = np.empty((capacity, 1), dtype=np.float32)
 
         self.idx = 0
-        self.last_save = 0
         self.full = False
+        self.save_dir = None
+        self.last_saved_idx = self.idx
 
     def __len__(self):
         return self.capacity if self.full else self.idx
 
-    def add(self, obs, action, reward, next_obs, done, done_no_max):
+    def add(self, obs, action, reward, next_obs, done):
         np.copyto(self.obses[self.idx], obs)
         np.copyto(self.actions[self.idx], action)
         np.copyto(self.rewards[self.idx], reward)
         np.copyto(self.next_obses[self.idx], next_obs)
-        np.copyto(self.not_dones[self.idx], not done)
-        np.copyto(self.not_dones_no_max[self.idx], not done_no_max)
+        np.copyto(self.dones[self.idx], done)
 
         self.idx = (self.idx + 1) % self.capacity
         self.full = self.full or self.idx == 0
@@ -51,9 +51,18 @@ class ReplayBuffer(object):
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
         next_obses = torch.as_tensor(self.next_obses[idxs], device=self.device).float()
-        not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
-        not_dones_no_max = torch.as_tensor(
-            self.not_dones_no_max[idxs], device=self.device
-        )
+        dones = torch.as_tensor(self.dones[idxs], device=self.device)
 
-        return obses, actions, rewards, next_obses, not_dones, not_dones_no_max
+        return obses, actions, rewards, next_obses, dones
+
+    def save(self):
+        file = os.path.join(self.save_dir, f"{self.last_saved_idx}_{self.idx}.npz")
+        np.savez(
+            file=file,
+            obs=self.obses[self.last_saved_idx : self.idx],
+            actions=self.actions[self.last_saved_idx : self.idx],
+            rewards=self.rewards[self.last_saved_idx : self.idx],
+            next_obs=self.next_obses[self.last_saved_idx : self.idx],
+            dones=self.dones[self.last_saved_idx : self.idx],
+        )
+        self.last_saved_idx = self.idx

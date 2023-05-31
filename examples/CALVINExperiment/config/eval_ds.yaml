@@ -1,50 +1,7 @@
 defaults:
   - calvin_env: default # or default_close for close_drawer
-  - dataset: calvin_ds 
-  - dyn_sys: manifold_gmm # clfds or manifold_gmm
-  - _self_
-
-  - override hydra/job_logging: colorlog
-  - override hydra/hydra_logging: colorlog
-
-seed: 42
-slurm: false
-
-root: /home/lagandua/projects/refining-skill-sequences
-# root: E:/Uni-Freiburg/Research/refining-skill-sequences
-
-log_dir: ${root}/examples/CALVINExperiment/logs
-
-# Skill demos directory
-demos_dir: ${root}/examples/CALVINExperiment/data/demos
-
-# Skills to eval (txt file)
-skills_to_eval: ${root}/examples/CALVINExperiment/demos_extract/skills_to_extract.txt
-
-# Trained skill params are saved in directory
-skills_dir: ${root}/examples/CALVINExperiment/skills_ds
-
-# GMM input type
-state_type: 'pos'
-dim: 3
-
-# Dataset params:
-skill: null
-train: false # false to load validation dataset
-goal_centered: false # this must be false during evaluation
-dt: 0.0666
-sampling_dt: 0.0333
-normalized: false
-is_quaternion: false
-
-# Evaluation and DS params
-max_steps: 240
-# ds_type: 'clfds' 
-# ds_type: 'gmm'
-
-# GMM params
-gmm_components: null
-plot: null
+  - setup
+  - skills_setup
 
 # Environment params
 render: false

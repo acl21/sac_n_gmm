@@ -43,7 +43,7 @@ class TaskDemoEvaluator(object):
             x0 = xi.squeeze()[0, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
-            current_state = observation[start_idx:end_idx]
+            current_state = observation
             if dataset.state_type == "pos":
                 x = np.append(x0, np.append(dataset.fixed_ori, -1))
             else:
@@ -54,7 +54,7 @@ class TaskDemoEvaluator(object):
             error_margin = 0.01
             while np.linalg.norm(current_state - x0) >= error_margin:
                 observation, reward, done, info = self.env.step(action)
-                current_state = observation[start_idx:end_idx]
+                current_state = observation
                 count += 1
                 if count >= 200:
                     self.logger.info(

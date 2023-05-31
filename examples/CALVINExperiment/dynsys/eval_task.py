@@ -7,6 +7,7 @@ import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
 from examples.CALVINExperiment.envs.task_env import TaskSpecificEnv
+from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 
 cwd_path = Path(__file__).absolute().parents[0]
 calvin_exp_path = cwd_path.parents[0]
@@ -31,54 +32,30 @@ class TaskEvaluator(object):
         self.task = cfg.target_tasks
         self.task_name = "_".join(self.task)
         self.logger = logging.getLogger("TaskEvaluator")
+        self.fixed_ori = None
 
     def evaluate(self, ds, dataset, max_steps, sampling_dt, render=False, record=False):
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
-        start_idx, end_idx = 0, 3
         rollout_return = 0
 
-        x0 = ds[0].start
-        if self.cfg.state_type == "pos":
-            x0 = np.append(x0, np.append(dataset.fixed_ori, -1))
-        else:
-            x0 = np.append(x0, -1)
-        action = self.env.prepare_action(x0, type="abs")
-
         observation = self.env.reset()
-        current_state = observation[start_idx : end_idx + end_idx]
-        count = 0
-        error_margin = 0.01
-        while np.linalg.norm(current_state - x0[:-1]) >= error_margin:
-            observation, reward, done, info = self.env.step(action)
-            current_state = observation[start_idx : end_idx + end_idx]
-            count += 1
-            if count >= 200:
-                self.logger.info(
-                    "CALVIN is struggling to place the EE at the right initial pose"
-                )
-                self.logger.info(x0, current_state, np.linalg.norm(current_state - x0))
-                break
-        # self.logger.info(f'Simulating with DS')
-        if record:
-            self.logger.info("Recording Robot Camera Obs")
-            self.env.record_frame()
+        x = self.calibrate_EE_start_state(ds, observation, start_point_sigma=0.05)
+        gap = np.linalg.norm(x - ds[0].dataset.start)
         idx = 0
-        x = current_state[start_idx:end_idx]
         for step in range(max_steps):
             # Manually switch the DS after some time.
-            if step == 62:
+            if step == 64:
                 idx += 1
-
-            d_x = ds[idx].predict_dx(x - ds[idx].goal)
+            d_x = ds[idx].predict_dx(x)
             delta_x = sampling_dt * d_x
             new_x = x + delta_x
             if self.cfg.state_type == "pos":
-                new_x = np.append(new_x, np.append(dataset.fixed_ori, -1))
+                new_x = np.append(new_x, np.append(self.fixed_ori, -1))
             else:
                 new_x = np.append(new_x, -1)
             action = self.env.prepare_action(new_x, type="abs")
             observation, reward, done, info = self.env.step(action)
-            x = observation[start_idx:end_idx]
+            x = observation
             rollout_return += reward
             if record:
                 self.env.record_frame()
@@ -90,15 +67,16 @@ class TaskEvaluator(object):
         status = None
         if info["success"]:
             succesful_rollouts += 1
-            status = "Success"
+            status = f"Success {rollout_return}"
         else:
-            status = "Fail"
+            status = f"Fail {rollout_return}"
         self.logger.info(f"{idx+1}: {status}!")
         if record:
             self.logger.info("Saving Robot Camera Obs")
-            video_path = self.env.save_recorded_frames(self.cfg.exp_dir, f"{status}")
+            video_path = self.env.save_recorded_frames(
+                self.cfg.exp_dir, f"{np.random.randint(0, 100)}_{status}"
+            )
             self.env.reset_recorded_frames()
-            status = None
             if self.cfg.wandb:
                 wandb.log(
                     {
@@ -109,9 +87,6 @@ class TaskEvaluator(object):
                 )
         rollout_returns.append(rollout_return)
         rollout_lengths.append(step)
-        import pdb
-
-        pdb.set_trace()
         acc = succesful_rollouts / len(dataset.X)
         if self.cfg.wandb:
             wandb.config.update({"val dataset size": len(dataset.X)})
@@ -123,7 +98,7 @@ class TaskEvaluator(object):
                     "average_traj_len": np.mean(rollout_lengths),
                 }
             )
-        return acc, np.mean(rollout_returns), np.mean(rollout_lengths)
+        return acc, np.mean(rollout_returns), np.mean(rollout_lengths), status, gap
 
     def run(self):
         if self.cfg.wandb:
@@ -141,45 +116,64 @@ class TaskEvaluator(object):
 
         # Create and load models to evaluate
         self.cfg.dim = 3
-        ds = [hydra.utils.instantiate(self.cfg.dyn_sys) for t in self.task]
-        ds_model_dirs = [
-            os.path.join(self.cfg.skills_dir, self.cfg.state_type, t, ds[idx].name)
-            for idx, t in enumerate(self.task)
+        ds = [
+            CALVINSkill(skill, i, self.cfg.demos_dir, self.cfg.skills_dir)
+            for i, skill in enumerate(self.task)
         ]
-
-        dataset = None
-        # Works only with GMM DS for now
-        for idx in range(len(self.task)):
-            self.cfg.dataset.train = True
-            self.cfg.dataset.skill = self.task[idx]
-            dataset = hydra.utils.instantiate(self.cfg.dataset)
-            ds[idx].start = dataset.start
-            ds[idx].goal = dataset.goal
-
-            ds[idx].skills_dir = ds_model_dirs[idx]
-            ds[idx].load_params()
-            ds[idx].state_type = self.cfg.state_type
-            ds[idx].manifold = ds[idx].make_manifold(self.cfg.dim)
+        self.cfg.skill = self.task[0]
+        dataset = hydra.utils.instantiate(self.cfg.dataset)
+        self.fixed_ori = dataset.fixed_ori
 
         self.logger.info(
             f"Evaluating DS of skills in {self.task_name} task with {self.cfg.state_type} input on CALVIN environment"
         )
         # Create and load models to evaluate
         # Evaluate by simulating in the CALVIN environment
-        acc, avg_return, avg_len = self.evaluate(
-            ds,
-            dataset,
-            max_steps=self.cfg.max_steps,
-            render=self.cfg.render,
-            record=self.cfg.record,
-            sampling_dt=self.cfg.sampling_dt,
-        )
-        self.env.count = 0
+        fails = []
+        suc = []
+        runs = 50
+        for _ in range(0, runs):
+            acc, avg_return, avg_len, status, gap = self.evaluate(
+                ds,
+                dataset,
+                max_steps=self.cfg.max_steps,
+                render=self.cfg.render,
+                record=self.cfg.record,
+                sampling_dt=self.cfg.dt,
+            )
+            self.env.count = 0
+            if "F" in status:
+                fails.append(gap)
+            else:
+                suc.append(gap)
         if self.cfg.wandb:
             wandb.finish()
 
         # Log evaluation output
-        self.logger.info(f"{self.task_name} Task Accuracy: {round(acc, 2)}")
+        # self.logger.info(f"{self.task_name} Task Accuracy: {round(acc, 2)}")
+        self.logger.info(f"{self.task_name} Fails: {round(sum(fails)/len(fails), 2)}")
+        self.logger.info(f"{self.task_name} Succ: {round(sum(suc)/len(suc), 2)}")
+        self.logger.info(f"{self.task_name} Fail %: {round(len(fails)/runs, 2)}")
+        self.logger.info(f"{self.task_name} Suc %: {round(len(suc)/runs, 2)}")
+
+    def calibrate_EE_start_state(
+        self, ds, obs, error_margin=0.01, max_checks=15, start_point_sigma=0.1
+    ):
+        """Samples a random starting point and moves the end effector to that point"""
+        desired_start = ds[0].sample_start(size=1, sigma=start_point_sigma)
+        count = 0
+        state = np.append(desired_start, np.append(self.fixed_ori, -1))
+        action = self.env.prepare_action(state, type="abs")
+        while np.linalg.norm(obs - desired_start) > error_margin:
+            obs, _, _, _ = self.env.step(action)
+            count += 1
+            if count >= max_checks:
+                # self.cons_logger.info(
+                #     f"CALVIN is struggling to place the EE at the right initial pose. \
+                #         Difference: {np.linalg.norm(obs - desired_start)}"
+                # )
+                break
+        return obs
 
 
 @hydra.main(version_base="1.1", config_path="../config", config_name="eval_task")

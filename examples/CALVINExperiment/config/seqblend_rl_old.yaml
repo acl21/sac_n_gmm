@@ -30,7 +30,7 @@ demos_dir: ${root}/examples/CALVINExperiment/data/demos
 # Task params
 task: ${target_tasks} 
 state_type: 'pos'
-dim: none
+dim: 3
 
 # Skill library
 skills_dir: ${root}/examples/CALVINExperiment/skills_ds
@@ -54,20 +54,20 @@ gmm_components: 6
 plot: false
 
 # RL Agent params
-num_train_steps: 1e6
+num_train_steps: 5e5
 replay_buffer_capacity: ${num_train_steps}
-num_seed_steps: 5000
-eval_frequency: 10000
+num_seed_steps: 2000
+eval_frequency: 2000
 num_eval_episodes: 10
 device: cuda
-log_frequency: 10000
+log_frequency: 2000
 log_save_tb: false
-accumulate_steps: 8
+accumulate_steps: null
 
 # Environment params
 render: false
 record: true
-env_max_episode_steps: 20 
+env_max_episode_steps: null 
 # NOTE: Max env steps = max_episode_steps * accumulate_steps
 
 # WANDB Logging Params
