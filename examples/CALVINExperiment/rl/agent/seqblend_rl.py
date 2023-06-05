@@ -89,7 +89,7 @@ class CALVINSeqblendRLAgent(object):
         self.observation = self.calibrate_EE_start_state(self.observation)
         self.episode_steps = 0
 
-    def make_env(self):
+    def make_env(self, seed=None):
         new_env_cfg = {**self.calvin_env.env}
         new_env_cfg["use_egl"] = False
         new_env_cfg["show_gui"] = False
@@ -103,7 +103,8 @@ class CALVINSeqblendRLAgent(object):
 
         env = TaskSpecificEnv(**new_env_cfg)
         env.state_type = self.cfg.state_type
-
+        if seed is not None:
+            env.seed(seed)
         return env
 
     def get_state_dim(self):
@@ -133,6 +134,9 @@ class CALVINSeqblendRLAgent(object):
 
             if done:
                 break
+        self.steps += 1
+        self.episode_steps += 1
+
         next_observation = obs
         replay_buffer.add(
             self.observation,
@@ -143,12 +147,46 @@ class CALVINSeqblendRLAgent(object):
         )
         self.observation = next_observation
 
-        self.steps += 1
-        self.episode_steps += 1
         if done or (self.episode_steps >= self.cfg.max_episode_steps):
             self.reset()
             done = True
-        return total_reward, done
+        return total_reward, done, weight
+
+    # def populate_parallel(
+    #     self, steps: int = 1000, strategy: str = "random", nproc: int = 0
+    # ):
+    #     """
+    #     Carries out several random steps through multiple environments
+    #     run in parallel to fill up the replay buffer with experiences
+    #     Args:
+    #         steps: number of random steps to populate the buffer with
+    #         nproc: number of proccesses to use to fill the replay buffer in parallel
+    #     """
+    #     # Create parallel environments
+    #     nproc = os.cpu_count() if nproc == 0 else nproc
+    #     envs = [self.make_env(seed) for seed in range(nproc)]
+    #     envs = SubprocVecEnv(envs)
+    #     # Perform random steps to populate the replay buffer
+    #     step = 0
+    #     observations = envs.reset()
+    #     pbar = tqdm(total=steps)
+    #     while step < steps:
+    #         actions = self.get_stack_actions(observations, strategy)
+    #         next_observations, rewards, dones, infos = envs.step(actions)
+    #         next_observations = next_observations
+    #         for i, done in enumerate(dones):
+    #             # if 'TimeLimit.truncated' in infos[i]:
+    #             #     done = done and not infos[i]['TimeLimit.truncated']
+    #             next_obs = (
+    #                 infos[i]["terminal_observation"] if done else next_observations[i]
+    #             )
+    #             replay_buffer.add_transition(
+    #                 observations[i], actions[i], next_obs, rewards[i], dones[i]
+    #             )
+    #             observations[i] = next_observations[i]
+    #             step += 1
+    #             pbar.update(1)
+    #     pbar.close()
 
     def populate_replay_buffer(self, actor, replay_buffer):
         """

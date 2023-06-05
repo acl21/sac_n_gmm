@@ -10,5 +10,5 @@ defaults:
   - env: play_table_env
   - scene: calvin_scene_D_close_drawer
   - robot: panda_longer_finger
-  - tasks: new_playtable_tasks
+  - tasks: customized_tasks
   - recorder: recorder

@@ -53,7 +53,7 @@ class SkillEvaluatorDemos(object):
             action = self.env.prepare_action(x, type="abs")
 
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            count = 0.01
+            count = 0
             error_margin = 0.01
             while np.linalg.norm(current_state - x0) > error_margin:
                 observation, reward, done, info = self.env.step(action)

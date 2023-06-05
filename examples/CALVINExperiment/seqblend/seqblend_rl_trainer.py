@@ -1,8 +1,5 @@
 import hydra
-import logging
 import os
-import gym
-import numpy as np
 from pathlib import Path
 from omegaconf import DictConfig
 import pytorch_lightning as pl

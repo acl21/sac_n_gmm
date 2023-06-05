@@ -1,5 +1,5 @@
 # Skill params
-skills_dir: ${root}/examples/CALVINExperiment/skills_ds2
+skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 state_type: 'pos'
 dim: 3
 

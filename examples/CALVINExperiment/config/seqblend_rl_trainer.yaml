@@ -1,7 +1,7 @@
 defaults:
   - calvin_env: default
   - rl: sac
-  - rl/agent: seqblend_rl
+  - rl/agent: seqblend_rl_toy
   - setup
   - skills_setup
   - wandb
@@ -9,18 +9,18 @@ defaults:
 # Experiment things
 exp_dir: null
 target_tasks: ['open_drawer', 'close_drawer']
-task_sequential: true # Does order of the skill matter?
+task_sequential: true # Does order of the skills matter?
 
 
 # Training Hyperparameters
 random_seeds: 1
 num_train_steps: 1e6
-replay_buffer_capacity: ${num_train_steps}
+replay_buffer_capacity: 3e5
 num_seed_steps: 5000
-eval_frequency: 50 # episodes
+eval_frequency: 10 # episodes
 num_eval_episodes: 5
-accumulate_env_steps: 16
-max_episode_steps: 10
+accumulate_env_steps: 64
+max_episode_steps: 2
 
 # Visualization
 render: false
@@ -30,9 +30,9 @@ record: true
 
 hydra:
   run:
-    dir: ${log_dir}/seqblendrl-train/${now:%Y_%m_%d}/${now:%H_%M_%S}
+    dir: ${log_dir}/seqblendrl-train/${now:%m%d}/${now:%H%M%S}
   sweep:
-    dir: ${log_dir}/seqblendrl-train/${now:%Y_%m_%d}/${now:%H_%M_%S}
+    dir: ${log_dir}/seqblendrl-train/${now:%m%d}/${now:%H%M%S}
     subdir: ${hydra.job.override_dirname}
   job:
     config:

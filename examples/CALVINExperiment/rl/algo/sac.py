@@ -78,10 +78,7 @@ class SAC(pl.LightningModule):
 
         # Replay Buffer
         self.replay_buffer = ReplayBuffer(
-            state_dim,
-            action_dim,
-            int(replay_buffer_capacity),
-            self.device,
+            max_capacity=int(replay_buffer_capacity),
         )
         self.replay_buffer.save_dir = os.path.join(
             self.agent.cfg.exp_dir, "replay_buffer/"
@@ -95,6 +92,10 @@ class SAC(pl.LightningModule):
         self.episode_idx = torch.zeros(1, requires_grad=False)
         self.episode_return = 0
         self.episode_length = 0
+
+        # Action tracker (within an episode)
+        self.action_tracker = [-1 for x in range(self.agent.cfg.max_episode_steps)]
+        self.track_actions = True
 
         # To keep track of evaluation calls
         self.last_eval_episode_idx = 0
@@ -110,9 +111,10 @@ class SAC(pl.LightningModule):
             batch: current mini batch of replay data
             nb_batch: batch number
         """
-        reward, self.episode_done = self.agent.play_step(
+        reward, self.episode_done, action = self.agent.play_step(
             self.actor, "stochastic", self.replay_buffer
         )
+        self.action_tracker[self.episode_length] = action
         self.episode_return += reward
         self.episode_length += 1
 
@@ -141,6 +143,29 @@ class SAC(pl.LightningModule):
                 self.eval_step()
                 self.last_eval_episode_idx = self.episode_idx.item()
 
+            # Log average actions across episodes
+            if self.track_actions:
+                data = [
+                    [x + 1, y]
+                    for (x, y) in zip(
+                        range(len(self.action_tracker)), self.action_tracker
+                    )
+                ]
+                table = wandb.Table(data=data, columns=["Episode_Step", "Weight"])
+                wandb_obj.log(
+                    {
+                        "train/weight": wandb.plot.line(
+                            table,
+                            "Episode_Step",
+                            "Weight",
+                            title="Episode_Step vs Weight",
+                        )
+                    }
+                )
+                self.action_tracker = [
+                    -1 for x in range(self.agent.cfg.max_episode_steps)
+                ]
+
     def eval_step(self):
         """
         This function is called every time a training epoch ends.
@@ -163,6 +188,7 @@ class SAC(pl.LightningModule):
         wandb_logs["eval/avg_episode_return"] = eval_return
         wandb_logs["eval/avg_episode_length"] = eval_length
         wandb_logs["eval/env_steps"] = self.agent.env_steps
+        wandb_logs["eval/episode_number"] = self.episode_idx.item()
 
         # Log the video GIF to wandb if exists
         if eval_video_path is not None:
@@ -214,9 +240,10 @@ class SAC(pl.LightningModule):
         self.manual_backward(critic_loss)
         critic_optimizer.step()
 
-        self.log("critic_loss", critic_loss, on_step=True)
-        self.log("actor_loss", actor_loss, on_step=True)
-        self.log("alpha_loss", alpha_loss, on_step=True)
+        self.log("losses/critic_loss", critic_loss, on_step=True)
+        self.log("losses/actor_loss", actor_loss, on_step=True)
+        self.log("losses/alpha_loss", alpha_loss, on_step=True)
+        self.log("losses/env_steps", self.agent.env_steps, on_step=True)
 
     def compute_actor_and_alpha_loss(self, batch, alpha_optimizer):
         batch_observations = batch[0]
@@ -235,7 +262,7 @@ class SAC(pl.LightningModule):
             alpha_optimizer.step()
 
         alpha = self.log_alpha.exp()
-        self.log("alpha", alpha, on_step=True)
+        self.log("losses/alpha", alpha, on_step=True)
 
         q1, q2 = self.critic(batch_observations, policy_actions)
         Q_value = torch.min(q1, q2)

@@ -1,0 +1,21 @@
+_target_: examples.CALVINExperiment.rl.agent.seqblend_rl_toy_main.CALVINSeqblendToyRLAgent
+_recursive_: false
+calvin_env: ${calvin_env}
+target_tasks: ${target_tasks}
+task_sequential: ${task_sequential}
+state_type: ${state_type}
+num_train_steps: ${num_train_steps}
+num_seed_steps: ${num_seed_steps}
+eval_frequency: ${eval_frequency}
+num_eval_episodes: ${num_eval_episodes}
+device: ${device}
+accumulate_env_steps: ${accumulate_env_steps}
+max_episode_steps: ${max_episode_steps}
+
+render: ${render}
+record: ${record}
+
+wandb: ${wandb}
+exp_dir: ${exp_dir}
+skills_dir: ${skills_dir}
+demos_dir: ${demos_dir}

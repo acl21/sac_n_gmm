@@ -68,7 +68,7 @@ def extract_demos(cfg: DictConfig) -> None:
     skill_set = skill_set.split("\n")
     for skill in skill_set:
         cfg.skill = skill
-        datamodule = hydra.utils.instantiate(cfg.datamodule)
+        datamodule = hydra.utils.instantiate(cfg.extractmodule)
         datamodule.setup(stage="fit")
         save_demonstrations(datamodule, cfg.demos_dir, skill)
 

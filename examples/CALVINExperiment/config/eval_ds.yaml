@@ -4,11 +4,13 @@ defaults:
   - skills_setup
 
 # Environment params
-render: false
+render: true
 record: false
 
 # WANDB Logging Params
 wandb: false
+
+goal_centered: false
 
 
 hydra:

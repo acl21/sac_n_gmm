@@ -11,7 +11,7 @@ from examples.CALVINExperiment.rl.networks.utils.misc import transform_to_tensor
 from examples.CALVINExperiment.seqblend.CALVINSkill import CALVINSkill
 
 
-class CALVINSeqblendRLAgent(object):
+class CALVINSeqblendToyRLAgent(object):
     def __init__(
         self,
         calvin_env,
@@ -151,7 +151,7 @@ class CALVINSeqblendRLAgent(object):
         if done or (self.episode_steps >= self.cfg.max_episode_steps):
             self.reset()
             done = True
-        return total_reward, done
+        return total_reward, done, int(weight.item() > 0.5)
 
     def populate_replay_buffer(self, actor, replay_buffer):
         """
