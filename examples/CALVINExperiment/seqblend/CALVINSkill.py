@@ -41,6 +41,20 @@ class CALVINSkill:
             demos_dir=demos_dir,
             dt=0.0666,
         )
+        self.val_dataset = CALVINDynSysDataset(
+            skill=skill_name,
+            train=False,
+            state_type="pos",
+            goal_centered=False,
+            normalized=False,
+            demos_dir=demos_dir,
+            dt=0.0666,
+        )
+        self.val_starts_good_ones = list(
+            set(np.arange(0, len(self.val_dataset.X.numpy()))).difference(
+                set([0, 5, 11, 15, 18, 24, 26, 29])
+            )
+        )
         self.goal = self.dataset.goal
         self.desired_value = None
 
@@ -94,12 +108,14 @@ class CALVINSkill:
         return self.dim_
 
     def sample_start(self, size=1, sigma=0.15):
-        start = self.dataset.start
-        sampled = self.sample_gaussian_norm_ball(start, sigma, size)
-        if size == 1:
-            return sampled[0]
-        else:
-            return sampled
+        rand_idx = np.random.choice(self.val_starts_good_ones, size=1)[0]
+        return self.val_dataset.X.numpy()[rand_idx, 0, :3]
+        # start = self.dataset.start
+        # sampled = self.sample_gaussian_norm_ball(start, sigma, size)
+        # if size == 1:
+        #     return sampled[0]
+        # else:
+        #     return sampled
 
     def sample_gaussian_norm_ball(self, reference_point, sigma, num_samples):
         samples = []

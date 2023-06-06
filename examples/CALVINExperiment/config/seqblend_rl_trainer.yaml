@@ -14,10 +14,10 @@ task_sequential: true # Does order of the skills matter?
 
 # Training Hyperparameters
 random_seeds: 1
-num_train_steps: 1e6
-replay_buffer_capacity: 3e5
+num_train_steps: 5e5
+replay_buffer_capacity: 1e5
 num_seed_steps: 5000
-eval_frequency: 10 # episodes
+eval_frequency: 500 # episodes
 num_eval_episodes: 5
 accumulate_env_steps: 64
 max_episode_steps: 2

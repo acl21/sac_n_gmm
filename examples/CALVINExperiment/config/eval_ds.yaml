@@ -4,7 +4,7 @@ defaults:
   - skills_setup
 
 # Environment params
-render: true
+render: false
 record: false
 
 # WANDB Logging Params

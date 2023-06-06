@@ -70,6 +70,8 @@ class CALVINSeqblendToyRLAgent(object):
         # At any point in time, my agent can only perform self.cfg.max_episode_steps number of
         # "play_step"s in a given episode, this tracks that
         self.episode_steps = 0
+        # This tracks total episodes done in an experiment
+        self.episode_idx = 0
         # This tracks total "play_steps" taken in an experiment
         self.steps = 0
         # This tracks total environment steps taken in an experiment
@@ -134,7 +136,9 @@ class CALVINSeqblendToyRLAgent(object):
             total_reward += reward
             self.env_steps += 1
 
-            if done:
+            # Break when you are too close to the skill's goal
+            dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+            if done or (np.round(dist_to_goal, 2) <= 0.01):
                 break
         next_observation = obs
         replay_buffer.add(
@@ -151,6 +155,7 @@ class CALVINSeqblendToyRLAgent(object):
         if done or (self.episode_steps >= self.cfg.max_episode_steps):
             self.reset()
             done = True
+            self.episode_idx += 1
         return total_reward, done, int(weight.item() > 0.5)
 
     def populate_replay_buffer(self, actor, replay_buffer):
@@ -223,7 +228,9 @@ class CALVINSeqblendToyRLAgent(object):
                         self.env.render()
                     if self.cfg.record and (episode == rand_idx):
                         self.env.record_frame(size=64)
-                    if done:
+                    # Break when you are too close to the skill's goal
+                    dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+                    if done or (np.round(dist_to_goal, 2) <= 0.01):
                         break
                 self.observation = obs
                 episode_steps += 1
@@ -236,7 +243,7 @@ class CALVINSeqblendToyRLAgent(object):
             if self.cfg.record and (episode == rand_idx):
                 video_path = self.env.save_recorded_frames(
                     outdir=self.video_dir,
-                    fname=f"{self.steps}_{self.env_steps}",
+                    fname=f"{self.episode_idx}_{self.steps}_{self.env_steps}",
                 )
                 self.env.reset_recorded_frames()
                 if os.path.isfile(video_path):
@@ -256,7 +263,9 @@ class CALVINSeqblendToyRLAgent(object):
 
     def calibrate_EE_start_state(self, obs, error_margin=0.01, max_checks=15):
         """Samples a random starting point and moves the end effector to that point"""
-        desired_start = self.skill_ds[0].sample_start(size=1, sigma=0.05)
+        desired_start = self.skill_ds[0].sample_start(
+            size=1, sigma=0.05
+        )  # From val_dataset
         count = 0
         state = np.append(desired_start, np.append(self.fixed_ori, -1))
         action = self.env.prepare_action(state, type="abs")

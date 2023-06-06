@@ -4,6 +4,7 @@ import copy
 import imageio
 import cv2
 import os
+import numpy as np
 
 from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import (
     PlayTableSimEnv,
@@ -160,7 +161,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
     def save_recorded_frames(self, outdir, fname):
         """Save recorded frames as a video"""
         fname = f"{fname}.gif"
-        kargs = {"fps": 30}
+        kargs = {"fps": 60}
         fpath = os.path.join(outdir, fname)
-        imageio.mimsave(fpath, self.frames, "GIF", **kargs)
+        imageio.mimsave(fpath, np.array(self.frames), "GIF", **kargs)
         return fpath

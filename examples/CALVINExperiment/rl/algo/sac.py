@@ -94,14 +94,24 @@ class SAC(pl.LightningModule):
         self.episode_length = 0
 
         # Action tracker (within an episode)
-        self.action_tracker = [-1 for x in range(self.agent.cfg.max_episode_steps)]
-        self.track_actions = True
+        # self.action_tracker = [-1 for x in range(self.agent.cfg.max_episode_steps)]
+        # self.episode_actions = self.action_tracker
+        # self.track_actions = True
+        # self.action_tracker_n = 0
 
         # To keep track of evaluation calls
         self.last_eval_episode_idx = 0
 
         # PyTorch Lightning
         self.automatic_optimization = False
+
+    def track_running_avg(self, tracker, tracker_n, new_values):
+        """
+        Running average
+        """
+        for i, x in enumerate(tracker):
+            tracker[i] = ((tracker_n) * tracker[i] + new_values[i]) / (tracker_n + 1)
+        return tracker
 
     def training_step(self, batch, batch_idx):
         """
@@ -114,7 +124,7 @@ class SAC(pl.LightningModule):
         reward, self.episode_done, action = self.agent.play_step(
             self.actor, "stochastic", self.replay_buffer
         )
-        self.action_tracker[self.episode_length] = action
+        # self.episode_actions[self.episode_length] = action
         self.episode_return += reward
         self.episode_length += 1
 
@@ -138,33 +148,40 @@ class SAC(pl.LightningModule):
 
             # If gap to last evaluation is more than "eval_frequency" episodes
             if (
-                self.episode_idx - self.last_eval_episode_idx
+                self.episode_idx.item() - self.last_eval_episode_idx
             ) >= self.agent.cfg.eval_frequency:
                 self.eval_step()
                 self.last_eval_episode_idx = self.episode_idx.item()
 
             # Log average actions across episodes
-            if self.track_actions:
-                data = [
-                    [x + 1, y]
-                    for (x, y) in zip(
-                        range(len(self.action_tracker)), self.action_tracker
-                    )
-                ]
-                table = wandb.Table(data=data, columns=["Episode_Step", "Weight"])
-                wandb_obj.log(
-                    {
-                        "train/weight": wandb.plot.line(
-                            table,
-                            "Episode_Step",
-                            "Weight",
-                            title="Episode_Step vs Weight",
-                        )
-                    }
-                )
-                self.action_tracker = [
-                    -1 for x in range(self.agent.cfg.max_episode_steps)
-                ]
+            # if self.track_actions:
+            #     self.action_tracker = self.track_running_avg(
+            #         self.action_tracker, self.action_tracker_n, self.episode_actions
+            #     )
+            #     self.action_tracker_n += 1
+            #     self.episode_actions = [
+            #         -1 for x in range(self.agent.cfg.max_episode_steps)
+            #     ]
+            #     data = [
+            #         [x + 1, y]
+            #         for (x, y) in zip(
+            #             range(len(self.action_tracker)), self.action_tracker
+            #         )
+            #     ]
+            #     table = wandb.Table(data=data, columns=["Episode_Step", "Weight"])
+            #     wandb_obj.log(
+            #         {
+            #             "train/weight": wandb.plot.line(
+            #                 table,
+            #                 "Episode_Step",
+            #                 "Weight",
+            #                 title="Episode_Step vs Weight",
+            #             )
+            #         }
+            #     )
+            #     self.action_tracker = [
+            #         -1 for x in range(self.agent.cfg.max_episode_steps)
+            #     ]
 
     def eval_step(self):
         """

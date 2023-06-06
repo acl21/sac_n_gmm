@@ -23,6 +23,52 @@ sys.path.insert(
 sys.path.insert(0, root.as_posix())  # Root
 
 
+def sample_start(start, size=1, sigma=0.15):
+    sampled = sample_gaussian_norm_ball(start, sigma, size)
+    if size == 1:
+        return sampled[0]
+    else:
+        return sampled
+
+
+def sample_gaussian_norm_ball(reference_point, sigma, num_samples):
+    samples = []
+    for _ in range(num_samples):
+        # Step 1: Sample from standard Gaussian distribution
+        offset = np.random.randn(3)
+
+        # Step 2: Normalize the offset
+        normalized_offset = offset / np.linalg.norm(offset)
+
+        # Step 3: Scale the normalized offset
+        scaled_offset = normalized_offset * np.random.normal(0, sigma)
+
+        # Step 4: Translate the offset
+        sampled_point = reference_point + scaled_offset
+
+        samples.append(sampled_point)
+
+    return samples
+
+
+def calibrate_EE_start_state(obs, env, dataset, error_margin=0.01, max_checks=15):
+    """Samples a random starting point and moves the end effector to that point"""
+    desired_start = sample_start(dataset.start, size=1, sigma=0.05)
+    count = 0
+    state = np.append(desired_start, np.append(dataset.fixed_ori, -1))
+    action = env.prepare_action(state, type="abs")
+    while np.linalg.norm(obs[0:3] - desired_start) > error_margin:
+        obs, _, _, _ = env.step(action)
+        count += 1
+        if count >= max_checks:
+            # self.cons_logger.info(
+            #     f"CALVIN is struggling to place the EE at the right initial pose. \
+            #         Difference: {np.linalg.norm(obs - desired_start)}"
+            # )
+            break
+    return obs
+
+
 class SkillEvaluator(object):
     """Python wrapper that allows you to evaluate learned DS skills
     in the CALVIN environment.
@@ -39,31 +85,32 @@ class SkillEvaluator(object):
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         start_idx, end_idx = self.env.get_valid_columns()
         for idx, (xi, d_xi) in enumerate(dataloader):
+            if idx in [0, 15, 18, 24, 26, 29]:
+                continue
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f"Test Trajectory {idx+1}/{len(dataset)}")
-            x0 = xi.squeeze()[0, :].numpy()
             goal = dataset.goal
             rollout_return = 0
             observation = self.env.reset()
-            current_state = observation[start_idx:end_idx]
-            if dataset.state_type == "pos":
-                temp = np.append(x0, np.append(dataset.fixed_ori, -1))
-            else:
-                temp = np.append(x0, -1)
-            action = self.env.prepare_action(temp, type="abs")
-            # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            count = 0
+            # observation = calibrate_EE_start_state(
+            #     observation[start_idx:end_idx], self.env, dataset
+            # )
+            desired_start = xi[0, 0, :3].numpy()
+            max_checks = 20
             error_margin = 0.01
-            while np.linalg.norm(current_state - x0) >= error_margin:
-                observation, reward, done, info = self.env.step(action)
-                current_state = observation[start_idx:end_idx]
+            count = 0
+            state = np.append(desired_start, np.append(dataset.fixed_ori, -1))
+            action = self.env.prepare_action(state, type="abs")
+            while np.linalg.norm(observation[0:3] - desired_start) > error_margin:
+                observation, _, _, _ = self.env.step(action)
                 count += 1
-                if count >= 200:
-                    # x0 = current_state
+                if count >= max_checks:
                     self.logger.info(
-                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.round(np.linalg.norm(current_state - x0), 2)}"
+                        f"CALVIN is struggling to place the EE at the right initial pose. \
+                            Difference: {np.linalg.norm(observation[0:3] - desired_start)}"
                     )
                     break
+
             x = observation[start_idx:end_idx]
             # self.logger.info(f'Simulating with DS')
             if record:
@@ -86,6 +133,7 @@ class SkillEvaluator(object):
                     # First Goal-Centering and then Normalize (GCN Space)
                     # d_x = ds.predict_dx(dataset.normalize(x-goal))
                     d_x = ds.predict_dx(x - goal)
+                    # print(d_x)
                     delta_x = sampling_dt * d_x
                     # Get next position in GCN space
                     # new_x = dataset.normalize(x-goal) + delta_x
@@ -101,11 +149,18 @@ class SkillEvaluator(object):
                 observation, reward, done, info = self.env.step(action)
                 x = observation[start_idx:end_idx]
                 rollout_return += reward
+                # Premature exit when close to skill's goal
+                dist_to_goal = np.linalg.norm(
+                    observation[start_idx:end_idx] - dataset.goal
+                )
+                print(step, np.round(dist_to_goal, 2), info["success"])
                 if record:
                     self.env.record_frame()
                 if render:
                     self.env.render()
-                if done:
+                # if done:
+                #     break
+                if np.round(dist_to_goal, 2) <= 0.01:
                     break
             status = None
             if info["success"]:
@@ -159,6 +214,7 @@ class SkillEvaluator(object):
 
         # Get validation dataset
         self.cfg.dataset.skill = self.skill
+        self.cfg.dataset.train = False
         val_dataset = hydra.utils.instantiate(self.cfg.dataset)
 
         # Create and load models to evaluate
@@ -179,6 +235,7 @@ class SkillEvaluator(object):
             # self.cfg.dataset.goal_centered = True
             train_dataset = hydra.utils.instantiate(self.cfg.dataset)
             val_dataset.goal = train_dataset.goal
+            val_dataset.fixed_ori = train_dataset.fixed_ori
             # val_dataset.X_mins = train_dataset.X_mins
             # val_dataset.X_maxs = train_dataset.X_maxs
 
@@ -197,7 +254,7 @@ class SkillEvaluator(object):
             max_steps=self.cfg.max_steps,
             render=self.cfg.render,
             record=self.cfg.record,
-            sampling_dt=self.cfg.sampling_dt,
+            sampling_dt=self.cfg.dt,
         )
 
         self.env.count = 0

@@ -81,12 +81,12 @@ class SkillSpecificEnv(PlayTableSimEnv):
                     self.outdir,
                     f"{self.skill_name}_{self.state_type}_{self.record_count}.mp4",
                 ),
-                self.frames,
+                np.array(self.frames),
                 fps=30,
             )
             self.record_count += 1
         else:
-            imageio.mimsave(path, self.frames, fps=30)
+            imageio.mimsave(path, np.array(self.frames), fps=30)
         return os.path.join(
             self.outdir,
             f"{self.skill_name}_{self.state_type}_{self.record_count-1}.mp4",
