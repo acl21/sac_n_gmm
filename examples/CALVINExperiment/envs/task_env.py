@@ -66,9 +66,9 @@ class TaskSpecificEnv(PlayTableSimEnv):
         """Returns the reward function that will be used
         for the RL algorithm"""
         reward = int(self._success())
-        if self.subgoal_reached:
-            reward += 1
-            self.subgoal_reached = False
+        # if self.subgoal_reached:
+        #     reward += 1
+        #     self.subgoal_reached = False
         r_info = {"reward": reward}
         return reward, r_info
 
@@ -144,7 +144,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
             depth_obs[f"depth_{cam.name}"] = depth
         return rgb_obs, depth_obs
 
-    def record_frame(self, obs_type="rgb", cam_type="static", size=208):
+    def record_frame(self, obs_type="rgb", cam_type="static", size=200):
         """Record RGB obsservation"""
         rgb_obs, depth_obs = self.get_camera_obs()
         if obs_type == "rgb":
@@ -160,8 +160,12 @@ class TaskSpecificEnv(PlayTableSimEnv):
 
     def save_recorded_frames(self, outdir, fname):
         """Save recorded frames as a video"""
+        if len(self.frames) == 0:
+            # This shouldn't happen but if it does, the function
+            # call exits gracefully
+            return None
         fname = f"{fname}.gif"
-        kargs = {"fps": 60}
+        kargs = {"fps": 30}
         fpath = os.path.join(outdir, fname)
         imageio.mimsave(fpath, np.array(self.frames), "GIF", **kargs)
         return fpath

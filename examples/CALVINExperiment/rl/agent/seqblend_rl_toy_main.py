@@ -128,7 +128,13 @@ class CALVINSeqblendToyRLAgent(object):
         obs = self.observation
         total_reward = 0
         for _ in range(self.cfg.accumulate_env_steps):
-            dx = self.skill_ds[idx].predict_dx(obs)
+            # Do nothing when you are at the goal
+            dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+            if np.round(dist_to_goal, 2) <= 0.01:
+                # Goal is reached, so dx should now be 0
+                dx = np.zeros(self.skill_ds[idx].dim())
+            else:
+                dx = self.skill_ds[idx].predict_dx(obs)
             new_x = obs + dx * self.dt
             temp = np.append(new_x, np.append(self.fixed_ori, -1))
             action = self.env.prepare_action(temp, type="abs")
@@ -136,9 +142,7 @@ class CALVINSeqblendToyRLAgent(object):
             total_reward += reward
             self.env_steps += 1
 
-            # Break when you are too close to the skill's goal
-            dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
-            if done or (np.round(dist_to_goal, 2) <= 0.01):
+            if done:
                 break
         next_observation = obs
         replay_buffer.add(
@@ -203,9 +207,8 @@ class CALVINSeqblendToyRLAgent(object):
         for episode in tqdm(range(1, self.cfg.num_eval_episodes + 1)):
             episode_steps = 0
             episode_return = 0
-            self.observation = self.env.reset()
-            # Start from a known starting point
-            self.observation = self.calibrate_EE_start_state(self.observation)
+            # Reset agent and self.observation
+            self.reset()
             # Recording setup
             if self.cfg.record and (episode == rand_idx):
                 self.env.reset_recorded_frames()
@@ -218,7 +221,13 @@ class CALVINSeqblendToyRLAgent(object):
                     idx = 1
                 obs = self.observation
                 for _ in range(self.cfg.accumulate_env_steps):
-                    dx = self.skill_ds[idx].predict_dx(obs)
+                    # Do nothing when you are at the goal
+                    dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+                    if np.round(dist_to_goal, 2) <= 0.01:
+                        # Goal is reached, so dx should now be 0
+                        dx = np.zeros(self.skill_ds[idx].dim())
+                    else:
+                        dx = self.skill_ds[idx].predict_dx(obs)
                     new_x = obs + dx * self.dt
                     temp = np.append(new_x, np.append(self.fixed_ori, -1))
                     action = self.env.prepare_action(temp, type="abs")
@@ -228,14 +237,11 @@ class CALVINSeqblendToyRLAgent(object):
                         self.env.render()
                     if self.cfg.record and (episode == rand_idx):
                         self.env.record_frame(size=64)
-                    # Break when you are too close to the skill's goal
-                    dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
-                    if done or (np.round(dist_to_goal, 2) <= 0.01):
+                    if done:
                         break
                 self.observation = obs
                 episode_steps += 1
                 if done:
-                    self.reset()
                     break
             if ("success" in info) and info["success"]:
                 succesful_episodes += 1
@@ -252,6 +258,8 @@ class CALVINSeqblendToyRLAgent(object):
                     self.cons_logger.info("Env returned a path with an unsaved video!")
             episodes_returns.append(episode_return)
             episodes_lengths.append(episode_steps)
+        # Reset agent before exiting evaluate()
+        self.reset()
         accuracy = succesful_episodes / self.cfg.num_eval_episodes
 
         return (
