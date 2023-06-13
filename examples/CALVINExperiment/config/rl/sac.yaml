@@ -7,7 +7,7 @@ input_dim: 0 # to be specified later
 action_dim: 0 # to be specified later
 device: ${device}
 discount: 0.99
-init_alpha: 0.2
+init_alpha: 0.01
 optimize_alpha: true
 alpha_lr: 3e-4
 alpha_betas: [0.9, 0.999]

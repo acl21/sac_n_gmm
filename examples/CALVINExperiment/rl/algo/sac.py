@@ -231,17 +231,18 @@ class SAC(pl.LightningModule):
 
     def optimize_networks(self, batch, optimizers):
         actor_optimizer, critic_optimizer, alpha_optimizer = optimizers[:3]
+
+        critic_loss = self.compute_critic_loss(batch)
+        critic_optimizer.zero_grad()
+        self.manual_backward(critic_loss)
+        critic_optimizer.step()
+
         actor_loss, alpha_loss = self.compute_actor_and_alpha_loss(
             batch, alpha_optimizer
         )
         actor_optimizer.zero_grad()
         self.manual_backward(actor_loss)
         actor_optimizer.step()
-
-        critic_loss = self.compute_critic_loss(batch)
-        critic_optimizer.zero_grad()
-        self.manual_backward(critic_loss)
-        critic_optimizer.step()
 
         self.log("losses/critic_loss", critic_loss, on_step=True)
         self.log("losses/actor_loss", actor_loss, on_step=True)

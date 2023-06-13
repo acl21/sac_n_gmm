@@ -161,14 +161,7 @@ class TaskDemoEvaluator(object):
 
 @hydra.main(version_base="1.1", config_path="../config", config_name="eval_task")
 def main(cfg: DictConfig) -> None:
-    new_env_cfg = {**cfg.calvin_env.env}
-    new_env_cfg["use_egl"] = False
-    new_env_cfg["show_gui"] = False
-    new_env_cfg["use_vr"] = False
-    new_env_cfg["use_scene_info"] = True
-    new_env_cfg["tasks"] = cfg.calvin_env.tasks
-    new_env_cfg.pop("_target_", None)
-    new_env_cfg.pop("_recursive_", None)
+    new_env_cfg = {**cfg.calvin_env}
     new_env_cfg["target_tasks"] = cfg.target_tasks
     new_env_cfg["sequential"] = cfg.task_sequential
 

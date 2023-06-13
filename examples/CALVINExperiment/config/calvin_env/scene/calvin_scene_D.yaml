@@ -1,8 +1,8 @@
 _target_: calvin_env.scene.play_table_scene.PlayTableScene
 _recursive_: false
-data_path: ${calvin_env.data_path}
+data_path: data ## ${data_path}
 global_scaling: 0.8
-euler_obs: ${calvin_env.robot.euler_obs}
+euler_obs: true ## ${robot_cfg.euler_obs}
 robot_base_position: [-0.34, -0.46, 0.24]
 robot_base_orientation: [0, 0, 0]
 robot_initial_joint_positions: [-1.21779206,  1.03987646,  2.11978261, -2.34205014, -0.87015947, 1.64119353,  0.55344866]

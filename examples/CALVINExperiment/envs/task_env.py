@@ -19,7 +19,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.tasks = hydra.utils.instantiate(tasks)
         self.target_tasks = target_tasks
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
-        self.completed_tasks_so_far = []
+        self.completed_tasks = []
         self.sequential = sequential
         self.state_type = "pos"
         self.frames = []
@@ -40,12 +40,12 @@ class TaskSpecificEnv(PlayTableSimEnv):
             if self.sequential:
                 if task == next_task:
                     self.tasks_to_complete.pop(0)
-                    self.completed_tasks_so_far.append(task)
+                    self.completed_tasks.append(task)
             else:
                 if task in self.tasks_to_complete:
                     self.tasks_to_complete.remove(task)
-                    self.completed_tasks_so_far.append(task)
-            if len(self.completed_tasks_so_far) == 1:
+                    self.completed_tasks.append(task)
+            if len(self.completed_tasks) == 1:
                 if task == "open_drawer":
                     self.start_info["scene_info"]["doors"]["base__drawer"][
                         "current_state"
@@ -78,7 +78,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         d_info = {
             "success": done,
             "tasks_to_complete": self.tasks_to_complete,
-            "completed_tasks": self.completed_tasks_so_far,
+            "completed_tasks": self.completed_tasks,
         }
         return done, d_info
 
@@ -129,7 +129,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         obs = super().reset()
         self.start_info = self.get_info()
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
-        self.completed_tasks_so_far = []
+        self.completed_tasks = []
         self.reset_recorded_frames()
         return obs
 

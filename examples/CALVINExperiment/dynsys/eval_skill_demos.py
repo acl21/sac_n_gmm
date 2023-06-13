@@ -163,17 +163,7 @@ class SkillEvaluatorDemos(object):
 
 @hydra.main(version_base="1.1", config_path="../config", config_name="eval_ds")
 def main(cfg: DictConfig) -> None:
-    # pdb.set_trace()
-    new_env_cfg = {**cfg.calvin_env.env}
-    new_env_cfg["use_egl"] = False
-    new_env_cfg["show_gui"] = False
-    new_env_cfg["use_vr"] = False
-    new_env_cfg["use_scene_info"] = True
-    new_env_cfg["tasks"] = cfg.calvin_env.tasks
-    new_env_cfg.pop("_target_", None)
-    new_env_cfg.pop("_recursive_", None)
-
-    env = SkillSpecificEnv(**new_env_cfg)
+    env = SkillSpecificEnv(**cfg.calvin_env)
     env.set_state_type(cfg.state_type)
     env.set_outdir(hydra.core.hydra_config.HydraConfig.get()["runtime"]["output_dir"])
 

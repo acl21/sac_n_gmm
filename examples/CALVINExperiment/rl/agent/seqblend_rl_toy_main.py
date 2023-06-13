@@ -92,20 +92,11 @@ class CALVINSeqblendToyRLAgent(object):
         self.episode_steps = 0
 
     def make_env(self):
-        new_env_cfg = {**self.calvin_env.env}
-        new_env_cfg["use_egl"] = False
-        new_env_cfg["show_gui"] = False
-        new_env_cfg["use_vr"] = False
-        new_env_cfg["use_scene_info"] = True
-        new_env_cfg["tasks"] = self.calvin_env.tasks
-        new_env_cfg.pop("_target_", None)
-        new_env_cfg.pop("_recursive_", None)
+        new_env_cfg = {**self.calvin_env}
         new_env_cfg["target_tasks"] = self.cfg.target_tasks
         new_env_cfg["sequential"] = self.cfg.task_sequential
-
         env = TaskSpecificEnv(**new_env_cfg)
         env.state_type = self.cfg.state_type
-
         return env
 
     def get_state_dim(self):
