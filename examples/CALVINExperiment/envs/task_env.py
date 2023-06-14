@@ -26,6 +26,97 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self._max_episode_steps = 0
         self.subgoal_reached = False
 
+    def get_camera_obs(self):
+        """Collect camera, robot and scene observations.
+
+        Camera Observations
+        rgb_static: (dtype=np.uint8, shape=(200, 200, 3)),
+        rgb_gripper: (dtype=np.uint8, shape=(84, 84, 3)),
+        rgb_tactile: (dtype=np.uint8, shape=(160, 120, 6)),
+        depth_static: (dtype=np.float32, shape=(200, 200)),
+        depth_gripper: (dtype=np.float32, shape=(84, 84)),
+        depth_tactile: (dtype=np.float32, shape=(160, 120, 2))
+        """
+        assert self.cameras is not None
+        rgb_obs = {}
+        depth_obs = {}
+        for cam in self.cameras:
+            rgb, depth = cam.render()
+            rgb_obs[f"rgb_{cam.name}"] = rgb
+            depth_obs[f"depth_{cam.name}"] = depth
+        return rgb_obs, depth_obs
+
+    def get_obs(self):
+        """
+        Robot Observations ('robot_obs'):
+        (dtype=np.float32, shape=(15,))
+        tcp position (3): x,y,z in world coordinates
+        tcp orientation (3): euler angles x,y,z in world coordinates
+        gripper opening width (1): in meter
+        arm_joint_states (7): in rad
+        gripper_action (1): binary (close = -1, open = 1)
+
+        Scene Observations ('scene_obs'):
+        (dtype=np.float32, shape=(24,))
+        sliding door (1): joint state
+        drawer (1): joint state
+        button (1): joint state
+        switch (1): joint state
+        lightbulb (1): on=1, off=0
+        green light (1): on=1, off=0
+        red block (6): (x, y, z, euler_x, euler_y, euler_z)
+        blue block (6): (x, y, z, euler_x, euler_y, euler_z)
+        pink block (6): (x, y, z, euler_x, euler_y, euler_z)
+        """
+
+        # robot_obs, robot_info = self.robot.get_observation()
+        # if self.state_type == "pos":
+        #     return robot_obs[:3]
+        # else:
+        #     return robot_obs
+
+        obs = self.get_state_obs()
+        # Return only pos + joints + drawer state for now i.e., size 11
+        ob = np.concatenate([obs["robot_obs"][:3], obs["robot_obs"][7:-1]])
+        # 1 when the drawer is open else 0
+        # ob[-1] = int(ob[-1] > 0.16)
+        return ob
+
+    def step(self, action):
+        """Performing a relative action in the environment
+        input:
+            action: 7 tuple containing
+                    Position x, y, z.
+                    Angle in rad x, y, z.
+                    Gripper action
+                    each value in range (-1, 1)
+        output:
+            observation, reward, done info
+        """
+        # Transform gripper action to discrete space
+        env_action = action.copy()
+        env_action["action"][-1] = (int(action["action"][-1] >= 0) * 2) - 1
+        self.robot.apply_action(env_action)
+        for i in range(self.action_repeat):
+            self.p.stepSimulation(physicsClientId=self.cid)
+        self.scene.step()
+        obs = self.get_obs()
+        info = self.get_info()
+        reward, r_info = self._reward()
+        done, d_info = self._termination()
+        info.update(r_info)
+        info.update(d_info)
+        return obs, reward, done, info
+
+    def reset(self):
+        obs = super().reset()
+        self.scene.reset()
+        self.start_info = self.get_info()
+        self.tasks_to_complete = copy.deepcopy(self.target_tasks)
+        self.completed_tasks = []
+        self.reset_recorded_frames()
+        return obs
+
     def _success(self):
         """
         Returns a boolean indicating if the task was performed correctly.
@@ -49,7 +140,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
                 if task == "open_drawer":
                     self.start_info["scene_info"]["doors"]["base__drawer"][
                         "current_state"
-                    ] = 0.2
+                    ] = 0.165
                 elif task == "close_drawer":
                     self.start_info["scene_info"]["doors"]["base__drawer"][
                         "current_state"
@@ -82,31 +173,6 @@ class TaskSpecificEnv(PlayTableSimEnv):
         }
         return done, d_info
 
-    def step(self, action):
-        """Performing a relative action in the environment
-        input:
-            action: 7 tuple containing
-                    Position x, y, z.
-                    Angle in rad x, y, z.
-                    Gripper action
-                    each value in range (-1, 1)
-        output:
-            observation, reward, done info
-        """
-        # Transform gripper action to discrete space
-        env_action = action.copy()
-        env_action["action"][-1] = (int(action["action"][-1] >= 0) * 2) - 1
-        self.robot.apply_action(env_action)
-        for i in range(self.action_repeat):
-            self.p.stepSimulation(physicsClientId=self.cid)
-        obs = self.get_obs()
-        info = self.get_info()
-        reward, r_info = self._reward()
-        done, d_info = self._termination()
-        info.update(r_info)
-        info.update(d_info)
-        return obs, reward, done, info
-
     def prepare_action(self, input, type):
         action = []
         if self.state_type == "joint":
@@ -117,33 +183,6 @@ class TaskSpecificEnv(PlayTableSimEnv):
 
         return action
 
-    def get_obs(self):
-        """Overwrite robot obs to only retrieve end effector position"""
-        robot_obs, robot_info = self.robot.get_observation()
-        if self.state_type == "pos":
-            return robot_obs[:3]
-        else:
-            return robot_obs
-
-    def reset(self):
-        obs = super().reset()
-        self.start_info = self.get_info()
-        self.tasks_to_complete = copy.deepcopy(self.target_tasks)
-        self.completed_tasks = []
-        self.reset_recorded_frames()
-        return obs
-
-    def get_camera_obs(self):
-        """Collect camera, robot and scene observations."""
-        assert self.cameras is not None
-        rgb_obs = {}
-        depth_obs = {}
-        for cam in self.cameras:
-            rgb, depth = cam.render()
-            rgb_obs[f"rgb_{cam.name}"] = rgb
-            depth_obs[f"depth_{cam.name}"] = depth
-        return rgb_obs, depth_obs
-
     def record_frame(self, obs_type="rgb", cam_type="static", size=200):
         """Record RGB obsservation"""
         rgb_obs, depth_obs = self.get_camera_obs()
@@ -153,10 +192,6 @@ class TaskSpecificEnv(PlayTableSimEnv):
             frame = depth_obs[f"{obs_type}_{cam_type}"]
         frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
         self.frames.append(frame)
-
-    def reset_recorded_frames(self):
-        """Reset recorded frames"""
-        self.frames = []
 
     def save_recorded_frames(self, outdir, fname):
         """Save recorded frames as a video"""
@@ -169,3 +204,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         fpath = os.path.join(outdir, fname)
         imageio.mimsave(fpath, np.array(self.frames), "GIF", **kargs)
         return fpath
+
+    def reset_recorded_frames(self):
+        """Reset recorded frames"""
+        self.frames = []

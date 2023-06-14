@@ -41,15 +41,15 @@ class TaskEvaluator(object):
         observation = self.env.reset()
         x = self.calibrate_EE_start_state(ds, observation, start_point_sigma=0.05)
 
-        gap = np.linalg.norm(x - ds[0].dataset.start)
+        gap = np.linalg.norm(x[:3] - ds[0].dataset.start)
         idx = 0
         for step in range(max_steps):
             # Manually switch the DS after some time.
-            d_x = ds[idx].predict_dx(x)
+            d_x = ds[idx].predict_dx(x[:3])
             delta_x = sampling_dt * d_x
-            new_x = x + delta_x
+            new_x = x[:3] + delta_x
             if self.cfg.state_type == "pos":
-                new_x = np.append(new_x, np.append(self.fixed_ori, -1))
+                new_x = np.append(new_x, np.append(ds[idx].dataset.fixed_ori, -1))
             else:
                 new_x = np.append(new_x, -1)
             action = self.env.prepare_action(new_x, type="abs")
@@ -61,9 +61,9 @@ class TaskEvaluator(object):
             if render:
                 self.env.render()
             # Premature exit when close to skill's goal
-            dist_to_goal = np.linalg.norm(observation - ds[idx].goal)
+            dist_to_goal = np.linalg.norm(observation[:3] - ds[idx].goal)
             if dist_to_goal <= 0.01:
-                idx = 1
+                idx += 1
             if done:
                 break
             # print(step, delta_x, info['completed_tasks'])
@@ -167,7 +167,7 @@ class TaskEvaluator(object):
         count = 0
         state = np.append(desired_start, np.append(self.fixed_ori, -1))
         action = self.env.prepare_action(state, type="abs")
-        while np.linalg.norm(obs - desired_start) > error_margin:
+        while np.linalg.norm(obs[:3] - desired_start) > error_margin:
             obs, _, _, _ = self.env.step(action)
             count += 1
             if count >= max_checks:

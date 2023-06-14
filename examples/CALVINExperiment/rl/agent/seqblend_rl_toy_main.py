@@ -120,13 +120,13 @@ class CALVINSeqblendToyRLAgent(object):
         total_reward = 0
         for _ in range(self.cfg.accumulate_env_steps):
             # Do nothing when you are at the goal
-            dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+            dist_to_goal = np.linalg.norm(obs[:3] - self.skill_ds[idx].goal)
             if np.round(dist_to_goal, 2) <= 0.01:
                 # Goal is reached, so dx should now be 0
                 dx = np.zeros(self.skill_ds[idx].dim())
             else:
-                dx = self.skill_ds[idx].predict_dx(obs)
-            new_x = obs + dx * self.dt
+                dx = self.skill_ds[idx].predict_dx(obs[:3])
+            new_x = obs[:3] + dx * self.dt
             temp = np.append(new_x, np.append(self.fixed_ori, -1))
             action = self.env.prepare_action(temp, type="abs")
             obs, reward, done, info = self.env.step(action)
@@ -193,6 +193,8 @@ class CALVINSeqblendToyRLAgent(object):
         self.cons_logger.info("Evaluation episodes in process")
         succesful_episodes, episodes_returns, episodes_lengths = 0, [], []
         saved_video_path = None
+        gt = [0, 1] * self.cfg.num_eval_episodes
+        pred = []
         # Choose a random episode to record
         rand_idx = np.random.randint(0, self.cfg.num_eval_episodes)
         for episode in tqdm(range(1, self.cfg.num_eval_episodes + 1)):
@@ -210,16 +212,17 @@ class CALVINSeqblendToyRLAgent(object):
                     idx = 0
                 else:
                     idx = 1
+                pred.append(idx)
                 obs = self.observation
                 for _ in range(self.cfg.accumulate_env_steps):
                     # Do nothing when you are at the goal
-                    dist_to_goal = np.linalg.norm(obs - self.skill_ds[idx].goal)
+                    dist_to_goal = np.linalg.norm(obs[:3] - self.skill_ds[idx].goal)
                     if np.round(dist_to_goal, 2) <= 0.01:
                         # Goal is reached, so dx should now be 0
                         dx = np.zeros(self.skill_ds[idx].dim())
                     else:
-                        dx = self.skill_ds[idx].predict_dx(obs)
-                    new_x = obs + dx * self.dt
+                        dx = self.skill_ds[idx].predict_dx(obs[:3])
+                    new_x = obs[:3] + dx * self.dt
                     temp = np.append(new_x, np.append(self.fixed_ori, -1))
                     action = self.env.prepare_action(temp, type="abs")
                     obs, reward, done, info = self.env.step(action)
@@ -251,8 +254,8 @@ class CALVINSeqblendToyRLAgent(object):
             episodes_lengths.append(episode_steps)
         # Reset agent before exiting evaluate()
         self.reset()
-        accuracy = succesful_episodes / self.cfg.num_eval_episodes
-
+        # accuracy = succesful_episodes / self.cfg.num_eval_episodes
+        accuracy = sum([pred[i] == gt[i] for i in range(len(gt))]) / len(gt)
         return (
             accuracy,
             np.mean(episodes_returns),
@@ -268,7 +271,7 @@ class CALVINSeqblendToyRLAgent(object):
         count = 0
         state = np.append(desired_start, np.append(self.fixed_ori, -1))
         action = self.env.prepare_action(state, type="abs")
-        while np.linalg.norm(obs - desired_start) > error_margin:
+        while np.linalg.norm(obs[:3] - desired_start) > error_margin:
             obs, _, _, _ = self.env.step(action)
             count += 1
             if count >= max_checks:

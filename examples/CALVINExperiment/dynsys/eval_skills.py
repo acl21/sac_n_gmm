@@ -164,6 +164,10 @@ class SkillEvaluator(object):
                     break
             status = None
             if info["success"]:
+                # current_info = self.env.get_info()
+                # print(
+                #     current_info["scene_info"]["buttons"]["base__button"]["joint_state"]
+                # )
                 succesful_rollouts += 1
                 status = "Success"
             else:

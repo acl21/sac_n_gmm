@@ -36,6 +36,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
 
     def reset(self):
         obs = super().reset()
+        self.scene.reset()
         self.start_info = self.get_info()
         return obs
 
@@ -155,6 +156,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         self.robot.apply_action(env_action)
         for i in range(self.action_repeat):
             self.p.stepSimulation(physicsClientId=self.cid)
+        self.scene.step()
         obs = self.get_obs()
         info = self.get_info()
         reward, r_info = self._reward()
