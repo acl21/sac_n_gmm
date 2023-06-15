@@ -38,30 +38,33 @@ class SkillEvaluatorDemos(object):
     ):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
-        start_idx, end_idx = self.env.get_valid_columns()
+        state_size = 0
+        if self.cfg.state_type == "pos":
+            state_size = 3
+        else:
+            state_size = 7
         for idx, (xi, d_xi) in enumerate(dataloader):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f"Test Trajectory {idx+1}/{len(dataset)}")
             x0 = xi.squeeze()[0, :].numpy()
             rollout_return = 0
             observation = self.env.reset()
-            current_state = observation[start_idx:end_idx]
             if dataset.state_type == "pos":
                 x = np.append(x0, np.append(dataset.fixed_ori, -1))
             else:
                 x = np.append(x0, -1)
-            action = self.env.prepare_action(x, type="abs")
+            action = self.env.prepare_action(x, action_type="abs")
 
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
+            max_checks = 50
             count = 0
             error_margin = 0.01
-            while np.linalg.norm(current_state - x0) > error_margin:
+            while np.linalg.norm(observation[:state_size] - x0) > error_margin:
                 observation, reward, done, info = self.env.step(action)
-                current_state = observation[start_idx:end_idx]
                 count += 1
-                if count >= 200:
+                if count >= max_checks:
                     self.logger.info(
-                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.linalg.norm(current_state - x0)}"
+                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.linalg.norm(observation[:state_size] - x0)}"
                     )
                     break
             # self.logger.info(f'Simulating with Data')
@@ -78,7 +81,7 @@ class SkillEvaluatorDemos(object):
                     new_x = np.append(new_x, np.append(dataset.fixed_ori, -1))
                 else:
                     new_x = np.append(new_x, -1)
-                action = self.env.prepare_action(new_x, type="abs")
+                action = self.env.prepare_action(new_x, action_type="abs")
                 observation, reward, done, info = self.env.step(action)
                 rollout_return += reward
                 if record:

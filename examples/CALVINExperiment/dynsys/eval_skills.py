@@ -23,52 +23,6 @@ sys.path.insert(
 sys.path.insert(0, root.as_posix())  # Root
 
 
-def sample_start(start, size=1, sigma=0.15):
-    sampled = sample_gaussian_norm_ball(start, sigma, size)
-    if size == 1:
-        return sampled[0]
-    else:
-        return sampled
-
-
-def sample_gaussian_norm_ball(reference_point, sigma, num_samples):
-    samples = []
-    for _ in range(num_samples):
-        # Step 1: Sample from standard Gaussian distribution
-        offset = np.random.randn(3)
-
-        # Step 2: Normalize the offset
-        normalized_offset = offset / np.linalg.norm(offset)
-
-        # Step 3: Scale the normalized offset
-        scaled_offset = normalized_offset * np.random.normal(0, sigma)
-
-        # Step 4: Translate the offset
-        sampled_point = reference_point + scaled_offset
-
-        samples.append(sampled_point)
-
-    return samples
-
-
-def calibrate_EE_start_state(obs, env, dataset, error_margin=0.01, max_checks=15):
-    """Samples a random starting point and moves the end effector to that point"""
-    desired_start = sample_start(dataset.start, size=1, sigma=0.05)
-    count = 0
-    state = np.append(desired_start, np.append(dataset.fixed_ori, -1))
-    action = env.prepare_action(state, type="abs")
-    while np.linalg.norm(obs[0:3] - desired_start) > error_margin:
-        obs, _, _, _ = env.step(action)
-        count += 1
-        if count >= max_checks:
-            # self.cons_logger.info(
-            #     f"CALVIN is struggling to place the EE at the right initial pose. \
-            #         Difference: {np.linalg.norm(obs - desired_start)}"
-            # )
-            break
-    return obs
-
-
 class SkillEvaluator(object):
     """Python wrapper that allows you to evaluate learned DS skills
     in the CALVIN environment.
@@ -80,38 +34,47 @@ class SkillEvaluator(object):
         self.skill = self.cfg.skill
         self.logger = logging.getLogger("SkillEvaluator")
 
-    def evaluate(self, ds, dataset, max_steps, sampling_dt, render=False, record=False):
+    def evaluate(self, ds, dataset, max_steps, dt, render=False, record=False):
         dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
-        start_idx, end_idx = self.env.get_valid_columns()
+        state_size = 0
+        if self.cfg.state_type == "pos":
+            state_size = 3
+        else:
+            state_size = 7
         for idx, (xi, d_xi) in enumerate(dataloader):
-            if idx in [0, 15, 18, 24, 26, 29]:
-                continue
+            # if idx in [0, 15, 18, 24, 26, 29]:
+            #     continue
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f"Test Trajectory {idx+1}/{len(dataset)}")
-            goal = dataset.goal
+            if self.cfg.state_type == "pos":
+                goal = dataset.goal
+            else:
+                goal = 0
             rollout_return = 0
             observation = self.env.reset()
-            # observation = calibrate_EE_start_state(
-            #     observation[start_idx:end_idx], self.env, dataset
-            # )
-            desired_start = xi[0, 0, :3].numpy()
-            max_checks = 20
+            desired_start = xi[0, 10, :].numpy()
+            max_checks = 50
             error_margin = 0.01
             count = 0
-            state = np.append(desired_start, np.append(dataset.fixed_ori, -1))
-            action = self.env.prepare_action(state, type="abs")
-            while np.linalg.norm(observation[0:3] - desired_start) > error_margin:
+            if self.cfg.state_type == "pos":
+                state = np.append(desired_start, np.append(dataset.fixed_ori, -1))
+            else:
+                state = np.append(desired_start, -1)
+            action = self.env.prepare_action(state, action_type="abs")
+            while (
+                np.linalg.norm(observation[:state_size] - desired_start) > error_margin
+            ):
                 observation, _, _, _ = self.env.step(action)
                 count += 1
                 if count >= max_checks:
                     self.logger.info(
                         f"CALVIN is struggling to place the EE at the right initial pose. \
-                            Difference: {np.linalg.norm(observation[0:3] - desired_start)}"
+                            Difference: {np.linalg.norm(observation[:state_size] - desired_start)}"
                     )
                     break
 
-            x = observation[start_idx:end_idx]
+            x = observation[:state_size]
             # self.logger.info(f'Simulating with DS')
             if record:
                 self.logger.info("Recording Robot Camera Obs")
@@ -125,34 +88,28 @@ class SkillEvaluator(object):
                         .unsqueeze(dim=0)
                     )
                     d_x = d_x.detach().cpu().numpy().squeeze()
-                    delta_x = sampling_dt * d_x
+                    delta_x = dt * d_x
                     new_x = x + delta_x
                 else:
-                    # goal = np.array([0.16425726, -0.23430869,  0.3718335])
-                    # goal = np.array([0.17921756, -0.21936302,  0.38075492])
                     # First Goal-Centering and then Normalize (GCN Space)
                     # d_x = ds.predict_dx(dataset.normalize(x-goal))
                     d_x = ds.predict_dx(x - goal)
-                    # print(d_x)
-                    delta_x = sampling_dt * d_x
+                    delta_x = dt * d_x
                     # Get next position in GCN space
                     # new_x = dataset.normalize(x-goal) + delta_x
                     new_x = x + delta_x
                     # Come back to original data space from GCN space
                     # new_x = dataset.undo_normalize(new_x) + goal
-                    # pdb.set_trace()
-                if dataset.state_type == "pos":
+                if self.cfg.state_type == "pos":
                     temp = np.append(new_x, np.append(dataset.fixed_ori, -1))
                 else:
                     temp = np.append(new_x, -1)
-                action = self.env.prepare_action(temp, type="abs")
+                action = self.env.prepare_action(temp, action_type="abs")
                 observation, reward, done, info = self.env.step(action)
-                x = observation[start_idx:end_idx]
+                x = observation[:state_size]
                 rollout_return += reward
                 # Premature exit when close to skill's goal
-                dist_to_goal = np.linalg.norm(
-                    observation[start_idx:end_idx] - dataset.goal
-                )
+                # dist_to_goal = np.linalg.norm(observation[:state_size] - goal)
                 # print(step, np.round(dist_to_goal, 2), info["success"])
                 if record:
                     self.env.record_frame()
@@ -160,8 +117,8 @@ class SkillEvaluator(object):
                     self.env.render()
                 # if done:
                 #     break
-                if np.round(dist_to_goal, 2) <= 0.01:
-                    break
+                # if np.round(dist_to_goal, 2) <= 0.01:
+                # break
             status = None
             if info["success"]:
                 # current_info = self.env.get_info()
@@ -205,7 +162,7 @@ class SkillEvaluator(object):
         if self.cfg.wandb:
             config = {
                 "state_type": self.cfg.state_type,
-                "sampling_dt": self.cfg.sampling_dt,
+                "dt": self.cfg.dt,
                 "max steps": self.cfg.max_steps,
             }
             wandb.init(
@@ -258,7 +215,7 @@ class SkillEvaluator(object):
             max_steps=self.cfg.max_steps,
             render=self.cfg.render,
             record=self.cfg.record,
-            sampling_dt=self.cfg.dt,
+            dt=self.cfg.dt,
         )
 
         self.env.count = 0

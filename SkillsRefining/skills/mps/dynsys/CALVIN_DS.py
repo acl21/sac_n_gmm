@@ -23,52 +23,66 @@ class CALVINDynSysDataset(Dataset):
         is_quaternion=False,
     ):
         self.skill = skill
+        self.state_type = state_type
         self.demos_dir = demos_dir
         self.goal_centered = goal_centered
         self.dt = dt
         self.sampling_dt = sampling_dt
         self.normalized = normalized
-        self.norm_range = [-1, 1]
-        self.X_mins = None
-        self.X_maxs = None
         self.train = train
-        self.fixed_ori = None
-        self.start = None
-        self.goal = None
+
+        # Check if demos and skill directory exist
+        assert os.path.isdir(self.demos_dir), "Demos directory does not exist!"
+        assert os.path.isdir(
+            os.path.join(self.demos_dir, self.skill)
+        ), "Skill directory does not exist!"
+
+        # Load from the demo directory
         if self.train:
             fname = "training"
         else:
             fname = "validation"
-        assert os.path.isdir(self.demos_dir), "Demos directory does not exist!"
         self.data_file = glob.glob(
             os.path.join(self.demos_dir, self.skill, f"{fname}.npy")
         )[0]
-        self.state_type = state_type
-
         start_idx, end_idx = self.get_valid_columns(self.state_type)
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
-        # Get the last orientation from the trajectory (this is bad for orientation dependant tasks)
+        # Get the last orientation from the trajectory (when skill usually completes)
+        # (this can be bad for orientation dependant tasks)
         s_idx, e_idx = self.get_valid_columns("ori")
         temp_ori = np.load(self.data_file)[:, :, s_idx:e_idx]
         self.fixed_ori = temp_ori[0, -1, :]
 
+        # Convert Euler orientations to Quaternion when asked
         if self.state_type == "ori" and is_quaternion:
             self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
         elif self.state_type == "pos_ori" and is_quaternion:
             oris = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X[:, :, 3:])
             self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
-        self.start = np.mean(self.X[:, 0, :], axis=0)
-        self.goal = np.mean(self.X[:, -1, :], axis=0)
+        # Average end point i.e., goal of the trajectory (useful during inference)
+        if "joint" not in self.state_type:
+            self.goal = np.mean(self.X[:, -1, :], axis=0)
+        else:
+            self.goal = 0
+
         if self.goal_centered:
+            assert "joint" not in self.state_type, "Do not goal center joint data!"
             # Make X goal centered i.e., subtract each trajectory with its goal
+            # Experiments show that goal centering is better with each trajectory's
+            # own goal and not with the average self.goal. However, during inference
+            # we use the self.goal
             self.X = self.X - np.expand_dims(self.X[:, -1, :], axis=1)
 
         if self.normalized:
-            self.set_mins_and_maxs(self.X)
+            assert "joint" not in self.state_type, "Do not normalize joint data!"
+            self.X_mins = np.min(self.X.reshape(-1, self.X.shape[-1]), axis=0)
+            self.X_maxs = np.max(self.X.reshape(-1, self.X.shape[-1]), axis=0)
+            self.norm_range = [-1, 1]
             self.X = self.normalize(self.X)
 
+        # Get first order derivative dX from X
         self.dX = (self.X[:, 2:, :] - self.X[:, :-2, :]) / self.dt
         self.X = self.X[:, 1:-1, :]
 
@@ -80,10 +94,6 @@ class CALVINDynSysDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.X[idx], self.dX[idx]
-
-    def set_mins_and_maxs(self, data=None):
-        self.X_mins = np.min(data.reshape(-1, data.shape[-1]), axis=0)
-        self.X_maxs = np.max(data.reshape(-1, data.shape[-1]), axis=0)
 
     def normalize(self, x):
         """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1"""
@@ -113,15 +123,3 @@ class CALVINDynSysDataset(Dataset):
         elif "grip" in state_type:
             start, end = 7, 8
         return start, end
-
-    def plot_random(self):
-        sampled_path = []
-        rand_idx = np.random.randint(0, len(self.X))
-        true_x = self.X[rand_idx, :, :].numpy()
-        x = true_x[0]
-        for t in range(len(true_x)):
-            sampled_path.append(x)
-            delta_x = self.sampling_dt * self.dX[rand_idx, t, :].numpy()
-            x = x + delta_x
-        sampled_path = np.array(sampled_path)
-        plot_3d_trajectories(true_x, sampled_path)

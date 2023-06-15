@@ -15,7 +15,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         # For this example we will modify the observation to
         # only retrieve the end effector pose
         self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(15,))
+        self.observation_space = None
         # We can use the task utility to know if the task was executed correctly
         self.tasks = hydra.utils.instantiate(tasks)
         self.skill_name = None
@@ -34,6 +34,10 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """Set env input type - joint, pos, pos_ori"""
         self.state_type = type
 
+    def get_obs_space(self):
+        self.observation_space = spaces.Box(low=0, high=1, shape=self.get_obs().shape)
+        return self.observation_space
+
     def reset(self):
         obs = super().reset()
         self.scene.reset()
@@ -41,9 +45,21 @@ class SkillSpecificEnv(PlayTableSimEnv):
         return obs
 
     def get_obs(self):
-        """Overwrite robot obs to only retrieve end effector position"""
+        """Overwrite robot obs to only retrieve end effector position/joint states and gripper action
+        Robot Observations ('robot_obs'):
+        (dtype=np.float32, shape=(15,))
+        tcp position (3): x,y,z in world coordinates
+        tcp orientation (3): euler angles x,y,z in world coordinates
+        gripper opening width (1): in meter
+        arm_joint_states (7): in rad
+        gripper_action (1): binary (close = -1, open = 1)
+        """
         robot_obs, robot_info = self.robot.get_observation()
-        return robot_obs
+        if self.state_type == "pos":
+            obs = robot_obs[:3]
+        else:
+            obs = robot_obs[8:15]
+        return np.concatenate([obs, robot_obs[-1:]])
 
     def get_camera_obs(self):
         """Collect camera, robot and scene observations."""
@@ -129,13 +145,22 @@ class SkillSpecificEnv(PlayTableSimEnv):
             start, end = 7, 8
         return start - 1, end - 1
 
-    def prepare_action(self, input, type):
+    def prepare_action(self, input, action_type="abs", state_type=None):
+        """Returns a dict in a format expected by the CALVIN env."""
+        if state_type is None:
+            state_type = self.state_type
+        assert state_type in [
+            "pos",
+            "pos_ori",
+            "cartesian",
+            "joint",
+        ], "Invalid state type!"
+        assert action_type in ["abs", "rel"], "Invalid action type!"
+        if "pos" in state_type:
+            state_type = "cartesian"
         action = []
-        if self.state_type == "joint":
-            action = {"type": f"joint_{type}", "action": None}
-        elif "pos" in self.state_type:
-            action = {"type": f"cartesian_{type}", "action": None}
-            action["action"] = input
+        action = {"type": f"{state_type}_{action_type}", "action": None}
+        action["action"] = input
 
         return action
 

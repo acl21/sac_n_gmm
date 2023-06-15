@@ -32,8 +32,7 @@ class ManifoldGMM(object):
         self.skills_dir = None
         self.logs_outdir = None
         self.logger = logging.getLogger("ManifoldGMM")
-        # Start and Goal states
-        self.start = None
+        # Goal state
         self.goal = None
 
     def make_manifold(self, dim):
@@ -48,7 +47,7 @@ class ManifoldGMM(object):
         manifold = Product([in_manifold, out_manifold])
         return manifold
 
-    def preprocess_data(self, dataset, normalize=False):
+    def preprocess_data(self, dataset):
         # Stack position and velocity data
         demos_xdx = [
             np.hstack([dataset.X[i], dataset.dX[i]]) for i in range(dataset.X.shape[0])
@@ -88,7 +87,7 @@ class ManifoldGMM(object):
         self.state_type = self.dataset.state_type
         self.dim = self.dataset.X.numpy().shape[-1]
         self.manifold = self.make_manifold(self.dim)
-        self.data = self.preprocess_data(dataset, normalize=False)
+        self.data = self.preprocess_data(dataset)
 
     def train(self, dataset, wandb_flag=False):
         # Dataset
