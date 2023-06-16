@@ -1,7 +1,7 @@
 defaults:
   - calvin_env: default
   - rl: sac
-  - rl/agent: seqblend_rl_toy
+  - rl/agent: seqblend_rl
   - setup
   - skills_setup
   - wandb
@@ -10,6 +10,7 @@ defaults:
 exp_dir: null
 target_tasks: ['open_drawer', 'close_drawer']
 task_sequential: true # Does order of the skills matter?
+sparse_rewards: true # true (reward only for successful full task) or false (reward for successful sub tasks also)
 
 
 # Training Hyperparameters
@@ -18,7 +19,7 @@ num_train_steps: 1e5
 replay_buffer_capacity: 1e5
 num_seed_steps: 256
 eval_frequency: 250 # episodes
-num_eval_episodes: 5
+num_eval_episodes: 10
 accumulate_env_steps: 64
 max_episode_steps: 2
 

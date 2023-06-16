@@ -134,6 +134,7 @@ def main(cfg: DictConfig) -> None:
     new_env_cfg.pop("_recursive_", None)
     new_env_cfg["target_tasks"] = cfg.target_tasks
     new_env_cfg["sequential"] = cfg.task_sequential
+    new_env_cfg["sparse_rewards"] = cfg.sparse_rewards
 
     env = TaskSpecificEnv(**new_env_cfg)
     env.state_type = cfg.state_type

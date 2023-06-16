@@ -1,4 +1,4 @@
-from gym import spaces
+import gym
 from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import (
     PlayTableSimEnv,
 )
@@ -14,8 +14,8 @@ class SkillSpecificEnv(PlayTableSimEnv):
         super(SkillSpecificEnv, self).__init__(**kwargs)
         # For this example we will modify the observation to
         # only retrieve the end effector pose
-        self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
-        self.observation_space = None
+        self.action_space = self.get_action_space()
+        self.observation_space = self.get_obs_space()
         # We can use the task utility to know if the task was executed correctly
         self.tasks = hydra.utils.instantiate(tasks)
         self.skill_name = None
@@ -34,9 +34,17 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """Set env input type - joint, pos, pos_ori"""
         self.state_type = type
 
+    def get_action_space(self):
+        """
+        Returns env's action space as a gym.spaces.Box object
+        """
+        return gym.spaces.Box(low=-1, high=1, shape=(7,))
+
     def get_obs_space(self):
-        self.observation_space = spaces.Box(low=0, high=1, shape=self.get_obs().shape)
-        return self.observation_space
+        """
+        Returns env's observation space as a gym.spaces.Box object
+        """
+        return gym.spaces.Box(low=0, high=1, shape=self.get_obs().shape)
 
     def reset(self):
         obs = super().reset()
@@ -86,11 +94,11 @@ class SkillSpecificEnv(PlayTableSimEnv):
         frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
         self.frames.append(frame)
 
-    def reset_recorded_frames(self):
+    def reset_recording(self):
         """Reset recorded frames"""
         self.frames = []
 
-    def save_recorded_frames(self, path=None):
+    def save_recording(self, path=None):
         """Save recorded frames as a video"""
         if path is None:
             imageio.mimsave(

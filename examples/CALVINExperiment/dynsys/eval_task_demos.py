@@ -93,10 +93,8 @@ class TaskDemoEvaluator(object):
             self.logger.info(f"{idx+1}: {status}!")
             if record:
                 self.logger.info("Saving Robot Camera Obs")
-                video_path = self.env.save_recorded_frames(
-                    self.cfg.exp_dir, f"{status}"
-                )
-                self.env.reset_recorded_frames()
+                video_path = self.env.save_recording(self.cfg.exp_dir, f"{status}")
+                self.env.reset_recording()
                 status = None
                 if self.cfg.wandb:
                     wandb.log(
@@ -164,6 +162,7 @@ def main(cfg: DictConfig) -> None:
     new_env_cfg = {**cfg.calvin_env}
     new_env_cfg["target_tasks"] = cfg.target_tasks
     new_env_cfg["sequential"] = cfg.task_sequential
+    new_env_cfg["sparse_rewards"] = cfg.sparse_rewards
 
     env = TaskSpecificEnv(**new_env_cfg)
     env.state_type = cfg.state_type

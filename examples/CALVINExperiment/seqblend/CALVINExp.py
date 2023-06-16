@@ -164,7 +164,7 @@ class CALVINExp:
 
         if cfg.record:
             self.logger.info("Recording Robot Camera Obs")
-            env.reset_recorded_frames()
+            env.reset_recording()
             env.record_frame()
 
         for i in range(timesteps):
@@ -238,8 +238,8 @@ class CALVINExp:
 
         if cfg.record:
             self.logger.info("Saving Robot Camera Obs")
-            video_path = env.save_recorded_frames()
-            env.reset_recorded_frames()
+            video_path = env.save_recording()
+            env.reset_recording()
             status = None
 
         res = {"Xt_track": Xt_track, "dXt_track": dXt_track, "wmat_track": wmat_track}

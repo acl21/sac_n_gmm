@@ -10,6 +10,7 @@ defaults:
 # Task params
 target_tasks: ['open_drawer', 'close_drawer']
 task_sequential: true
+sparse_rewards: true # true (reward only for successful full task) or false (reward for successful sub tasks also)
 
 # Task Demos
 demos_dir: ${root}/examples/CALVINExperiment/data/demos

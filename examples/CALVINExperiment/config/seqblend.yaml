@@ -18,6 +18,7 @@ skills_dir: ${root}/examples/CALVINExperiment/skills_ds
 # Task params
 target_tasks: ['open_drawer', 'close_drawer']
 task_sequential: true
+sparse_rewards: true # true (reward only for successful full task) or false (reward for successful sub tasks also)
 timesteps: 122
 state_type: 'pos'
 

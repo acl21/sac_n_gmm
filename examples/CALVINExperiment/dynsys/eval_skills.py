@@ -132,8 +132,8 @@ class SkillEvaluator(object):
             self.logger.info(f"{idx+1}: {status}!")
             if record:
                 self.logger.info("Saving Robot Camera Obs")
-                video_path = self.env.save_recorded_frames()
-                self.env.reset_recorded_frames()
+                video_path = self.env.save_recording()
+                self.env.reset_recording()
                 status = None
                 if self.cfg.wandb:
                     wandb.log(

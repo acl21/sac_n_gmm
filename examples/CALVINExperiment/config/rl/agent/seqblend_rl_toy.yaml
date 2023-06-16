@@ -3,6 +3,7 @@ _recursive_: false
 calvin_env: ${calvin_env}
 target_tasks: ${target_tasks}
 task_sequential: ${task_sequential}
+sparse_rewards: ${sparse_rewards}
 state_type: ${state_type}
 num_train_steps: ${num_train_steps}
 num_seed_steps: ${num_seed_steps}

@@ -52,7 +52,7 @@ class TaskEvaluator(object):
                 new_x = np.append(new_x, np.append(ds[idx].dataset.fixed_ori, -1))
             else:
                 new_x = np.append(new_x, -1)
-            action = self.env.prepare_action(new_x, type="abs")
+            action = self.env.prepare_action(new_x, action_type="abs")
             observation, reward, done, info = self.env.step(action)
             x = observation
             rollout_return += reward
@@ -76,10 +76,10 @@ class TaskEvaluator(object):
         self.logger.info(f"{idx+1}: {status}!")
         if record:
             self.logger.info("Saving Robot Camera Obs")
-            video_path = self.env.save_recorded_frames(
+            video_path = self.env.save_recording(
                 self.cfg.exp_dir, f"{np.random.randint(0, 100)}_{status}"
             )
-            self.env.reset_recorded_frames()
+            self.env.reset_recording()
             if self.cfg.wandb:
                 wandb.log(
                     {
@@ -166,7 +166,7 @@ class TaskEvaluator(object):
         desired_start = ds[0].sample_start(size=1, sigma=start_point_sigma)
         count = 0
         state = np.append(desired_start, np.append(self.fixed_ori, -1))
-        action = self.env.prepare_action(state, type="abs")
+        action = self.env.prepare_action(state, action_type="abs")
         while np.linalg.norm(obs[:3] - desired_start) > error_margin:
             obs, _, _, _ = self.env.step(action)
             count += 1
@@ -184,6 +184,7 @@ def main(cfg: DictConfig) -> None:
     new_env_cfg = {**cfg.calvin_env}
     new_env_cfg["target_tasks"] = cfg.target_tasks
     new_env_cfg["sequential"] = cfg.task_sequential
+    new_env_cfg["sparse_rewards"] = cfg.sparse_rewards
 
     env = TaskSpecificEnv(**new_env_cfg)
     env.state_type = cfg.state_type

@@ -1,4 +1,4 @@
-from gym import spaces
+import gym
 import hydra
 import copy
 import imageio
@@ -12,19 +12,32 @@ from examples.CALVINExperiment.calvin_env.calvin_env.envs.play_table_env import 
 
 
 class TaskSpecificEnv(PlayTableSimEnv):
-    def __init__(self, tasks={}, target_tasks=[], sequential=True, **kwargs):
+    def __init__(self, tasks, target_tasks, sequential, sparse_rewards, **kwargs):
         super(TaskSpecificEnv, self).__init__(**kwargs)
-        self.action_space = spaces.Box(low=0, high=1, shape=(1,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(15,))
+        self.action_space = self.get_action_space()
+        self.observation_space = self.get_obs_space()
         self.tasks = hydra.utils.instantiate(tasks)
         self.target_tasks = target_tasks
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
+        self.sparse_rewards = sparse_rewards
         self.completed_tasks = []
         self.sequential = sequential
         self.state_type = "pos"
         self.frames = []
         self._max_episode_steps = 0
         self.subgoal_reached = False
+
+    def get_action_space(self):
+        """
+        Returns env's action space as a gym.spaces.Box object
+        """
+        return gym.spaces.Box(low=-1, high=1, shape=(7,))
+
+    def get_obs_space(self):
+        """
+        Returns env's observation space as a gym.spaces.Box object
+        """
+        return gym.spaces.Box(low=0, high=1, shape=self.get_obs().shape)
 
     def get_camera_obs(self):
         """Collect camera, robot and scene observations.
@@ -69,17 +82,16 @@ class TaskSpecificEnv(PlayTableSimEnv):
         pink block (6): (x, y, z, euler_x, euler_y, euler_z)
         """
 
-        # robot_obs, robot_info = self.robot.get_observation()
-        # if self.state_type == "pos":
-        #     return robot_obs[:3]
-        # else:
-        #     return robot_obs
-
         obs = self.get_state_obs()
-        # Return only pos + joints + drawer state for now i.e., size 11
-        ob = np.concatenate([obs["robot_obs"][:3], obs["robot_obs"][7:-1]])
-        # 1 when the drawer is open else 0
-        # ob[-1] = int(ob[-1] > 0.16)
+        # Return only pos (size 3)
+        # return obs['robot_obs'][:3]
+        # Return pos + joint states (size 10)
+        # return np.concatenate([obs["robot_obs"][:3], obs["robot_obs"][7:-1]])
+        # Return pos + joint + drawer state (size 11)
+        ob = np.concatenate(
+            [obs["robot_obs"][:3], obs["robot_obs"][7:-1], obs["scene_obs"][1:2]]
+        )
+        ob[-1] = int(ob[-1] >= 0.12)  # 1 when open, 0 otherwise
         return ob
 
     def step(self, action):
@@ -114,7 +126,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.start_info = self.get_info()
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
         self.completed_tasks = []
-        self.reset_recorded_frames()
+        self.reset_recording()
         return obs
 
     def _success(self):
@@ -137,10 +149,12 @@ class TaskSpecificEnv(PlayTableSimEnv):
                     self.tasks_to_complete.remove(task)
                     self.completed_tasks.append(task)
             if len(self.completed_tasks) == 1:
+                # This manual inteference helps with tasks when open_drawer
+                # and close_drawer skills are executed one after another
                 if task == "open_drawer":
                     self.start_info["scene_info"]["doors"]["base__drawer"][
                         "current_state"
-                    ] = 0.165
+                    ] = 0.18
                 elif task == "close_drawer":
                     self.start_info["scene_info"]["doors"]["base__drawer"][
                         "current_state"
@@ -154,17 +168,21 @@ class TaskSpecificEnv(PlayTableSimEnv):
         return len(self.tasks_to_complete) == 0
 
     def _reward(self):
-        """Returns the reward function that will be used
-        for the RL algorithm"""
+        """
+        Returns the reward function that will be used
+        for the RL algorithm
+        """
         reward = int(self._success())
-        # if self.subgoal_reached:
-        #     reward += 1
-        #     self.subgoal_reached = False
+        if self.subgoal_reached and not self.sparse_rewards:
+            reward += 1
+            self.subgoal_reached = False
         r_info = {"reward": reward}
         return reward, r_info
 
     def _termination(self):
-        """Indicates if the robot has reached a terminal state"""
+        """
+        Indicates if the robot has reached a terminal state
+        """
         done = len(self.tasks_to_complete) == 0
         d_info = {
             "success": done,
@@ -173,18 +191,29 @@ class TaskSpecificEnv(PlayTableSimEnv):
         }
         return done, d_info
 
-    def prepare_action(self, input, type):
+    def prepare_action(self, input, action_type="abs", state_type=None):
+        """
+        Returns a dict in a format expected by the CALVIN env.
+        """
+        if state_type is None:
+            state_type = self.state_type
+        assert state_type in [
+            "pos",
+            "pos_ori",
+            "cartesian",
+            "joint",
+        ], "Invalid state type!"
+        assert action_type in ["abs", "rel"], "Invalid action type!"
+        if "pos" in state_type:
+            state_type = "cartesian"
         action = []
-        if self.state_type == "joint":
-            action = {"type": f"joint_{type}", "action": None}
-        elif "pos" in self.state_type:
-            action = {"type": f"cartesian_{type}", "action": None}
-            action["action"] = input
+        action = {"type": f"{state_type}_{action_type}", "action": None}
+        action["action"] = input
 
         return action
 
     def record_frame(self, obs_type="rgb", cam_type="static", size=200):
-        """Record RGB obsservation"""
+        """Record RGB obsservations"""
         rgb_obs, depth_obs = self.get_camera_obs()
         if obs_type == "rgb":
             frame = rgb_obs[f"{obs_type}_{cam_type}"]
@@ -193,7 +222,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         frame = cv2.resize(frame, (size, size), interpolation=cv2.INTER_AREA)
         self.frames.append(frame)
 
-    def save_recorded_frames(self, outdir, fname):
+    def save_recording(self, outdir, fname):
         """Save recorded frames as a video"""
         if len(self.frames) == 0:
             # This shouldn't happen but if it does, the function
@@ -205,6 +234,6 @@ class TaskSpecificEnv(PlayTableSimEnv):
         imageio.mimsave(fpath, np.array(self.frames), "GIF", **kargs)
         return fpath
 
-    def reset_recorded_frames(self):
+    def reset_recording(self):
         """Reset recorded frames"""
         self.frames = []
