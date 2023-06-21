@@ -95,7 +95,7 @@ class SAC(pl.LightningModule):
 
         # Action tracker (within an episode)
         self.action_tracker = [0 for x in range(self.agent.cfg.max_episode_steps)]
-        self.episode_actions = self.action_tracker
+        self.episode_actions = np.copy(self.action_tracker)
         self.track_actions = True
         self.action_tracker_n = 0
 

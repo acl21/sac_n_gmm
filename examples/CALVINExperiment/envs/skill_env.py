@@ -44,7 +44,7 @@ class SkillSpecificEnv(PlayTableSimEnv):
         """
         Returns env's observation space as a gym.spaces.Box object
         """
-        return gym.spaces.Box(low=0, high=1, shape=self.get_obs().shape)
+        return None
 
     def reset(self):
         obs = super().reset()

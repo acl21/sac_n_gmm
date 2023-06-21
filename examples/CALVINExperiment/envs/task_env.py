@@ -76,7 +76,7 @@ class TaskSpecificEnv(PlayTableSimEnv):
         button (1): joint state
         switch (1): joint state
         lightbulb (1): on=1, off=0
-        green light (1): on=1, off=0
+        green light (~ led) (1): on=1, off=0
         red block (6): (x, y, z, euler_x, euler_y, euler_z)
         blue block (6): (x, y, z, euler_x, euler_y, euler_z)
         pink block (6): (x, y, z, euler_x, euler_y, euler_z)
@@ -89,9 +89,12 @@ class TaskSpecificEnv(PlayTableSimEnv):
         # return np.concatenate([obs["robot_obs"][:3], obs["robot_obs"][7:-1]])
         # Return pos + joint + drawer state (size 11)
         ob = np.concatenate(
-            [obs["robot_obs"][:3], obs["robot_obs"][7:-1], obs["scene_obs"][1:2]]
+            [
+                obs["robot_obs"][:3],
+                obs["robot_obs"][7:-1],
+                obs["scene_obs"][:5],
+            ]
         )
-        ob[-1] = int(ob[-1] >= 0.12)  # 1 when open, 0 otherwise
         return ob
 
     def step(self, action):
@@ -129,53 +132,26 @@ class TaskSpecificEnv(PlayTableSimEnv):
         self.reset_recording()
         return obs
 
-    def _success(self):
-        """
-        Returns a boolean indicating if the task was performed correctly.
-        Part of this function's logic was taken from https://github.com/clvrai/skimo/blob/main/envs/calvin.py#L61.
-        """
+    def _reward(self):
         current_info = self.get_info()
         completed_tasks = self.tasks.get_task_info_for_set(
-            self.start_info, current_info, self.tasks_to_complete
+            self.start_info, current_info, self.target_tasks
         )
         next_task = self.tasks_to_complete[0]
+
+        reward = 0
         for task in list(completed_tasks):
             if self.sequential:
                 if task == next_task:
+                    reward += 1
                     self.tasks_to_complete.pop(0)
                     self.completed_tasks.append(task)
             else:
                 if task in self.tasks_to_complete:
+                    reward += 1
                     self.tasks_to_complete.remove(task)
                     self.completed_tasks.append(task)
-            if len(self.completed_tasks) == 1:
-                # This manual inteference helps with tasks when open_drawer
-                # and close_drawer skills are executed one after another
-                if task == "open_drawer":
-                    self.start_info["scene_info"]["doors"]["base__drawer"][
-                        "current_state"
-                    ] = 0.18
-                elif task == "close_drawer":
-                    self.start_info["scene_info"]["doors"]["base__drawer"][
-                        "current_state"
-                    ] = 0.0
-            if len(self.tasks_to_complete) == 0:
-                return True
-            else:
-                next_task = self.tasks_to_complete[0]
-                self.subgoal_reached = True
 
-        return len(self.tasks_to_complete) == 0
-
-    def _reward(self):
-        """
-        Returns the reward function that will be used
-        for the RL algorithm
-        """
-        reward = int(self._success())
-        if self.subgoal_reached and not self.sparse_rewards:
-            reward += 1
-            self.subgoal_reached = False
         r_info = {"reward": reward}
         return reward, r_info
 

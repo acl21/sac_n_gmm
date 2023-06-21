@@ -23,10 +23,10 @@ class CALVINSeqblendToyRLAgent(Agent):
 
     def get_action_space(self):
         """
-        For this toy task, just 1 (W ~ [0, 1]) is enough.
+        For this toy task, just 1 (W ~ [0, 3]) is enough.
         """
         action_dim = 1
-        return gym.spaces.Box(low=np.zeros(action_dim), high=np.ones(action_dim))
+        return gym.spaces.Box(low=np.zeros(action_dim), high=3 * np.ones(action_dim))
 
     def play_step(self, actor, strategy="stochastic", replay_buffer=None):
         """
@@ -34,10 +34,12 @@ class CALVINSeqblendToyRLAgent(Agent):
         tuple to the replay buffer
         """
         weight = self.get_action(actor, self.observation, strategy)
-        if weight <= 0.5:
+        if weight <= 1:
             idx = 0
-        else:
+        elif weight > 1 and weight <= 2:
             idx = 1
+        else:
+            idx = 2
         obs = self.observation
         total_reward = 0
         for _ in range(self.cfg.accumulate_env_steps):
@@ -49,7 +51,7 @@ class CALVINSeqblendToyRLAgent(Agent):
             else:
                 dx = self.skill_ds[idx].predict_dx(obs[:3])
             new_x = obs[:3] + dx * self.dt
-            temp = np.append(new_x, np.append(self.fixed_ori, -1))
+            temp = np.append(new_x, np.append(self.skill_ds[idx].fixed_ori, -1))
             action = self.env.prepare_action(temp, action_type="abs")
             obs, reward, done, info = self.env.step(action)
             total_reward += reward
@@ -74,7 +76,7 @@ class CALVINSeqblendToyRLAgent(Agent):
             self.reset()
             done = True
             self.episode_idx += 1
-        return total_reward, done, int(weight.item() > 0.5)
+        return total_reward, done, idx
 
     @torch.no_grad()
     def evaluate(self, actor):
@@ -82,7 +84,7 @@ class CALVINSeqblendToyRLAgent(Agent):
         self.cons_logger.info("Evaluation episodes in process")
         succesful_episodes, episodes_returns, episodes_lengths = 0, [], []
         saved_video_path = None
-        gt = [0, 1] * self.cfg.num_eval_episodes
+        gt = [0, 1, 2] * self.cfg.num_eval_episodes
         pred = []
         # Choose a random episode to record
         rand_idx = np.random.randint(0, self.cfg.num_eval_episodes)
@@ -97,10 +99,12 @@ class CALVINSeqblendToyRLAgent(Agent):
                 self.env.record_frame(size=64)
             while episode_steps < self.cfg.max_episode_steps:
                 weight = self.get_action(actor, self.observation, "deterministic")
-                if weight <= 0.5:
+                if weight <= 1:
                     idx = 0
-                else:
+                elif weight > 1 and weight <= 2:
                     idx = 1
+                else:
+                    idx = 2
                 pred.append(idx)
                 obs = self.observation
                 for _ in range(self.cfg.accumulate_env_steps):
@@ -112,7 +116,7 @@ class CALVINSeqblendToyRLAgent(Agent):
                     else:
                         dx = self.skill_ds[idx].predict_dx(obs[:3])
                     new_x = obs[:3] + dx * self.dt
-                    temp = np.append(new_x, np.append(self.fixed_ori, -1))
+                    temp = np.append(new_x, np.append(self.skill_ds[idx].fixed_ori, -1))
                     action = self.env.prepare_action(temp, action_type="abs")
                     obs, reward, done, info = self.env.step(action)
                     episode_return += reward

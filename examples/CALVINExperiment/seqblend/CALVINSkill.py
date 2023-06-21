@@ -52,10 +52,13 @@ class CALVINSkill:
         )
         self.val_starts_good_ones = list(
             set(np.arange(0, len(self.val_dataset.X.numpy()))).difference(
-                set([0, 5, 11, 15, 18, 24, 26, 29])
+                set([0, 12, 15, 16, 18, 19, 20, 22, 25, 26, 29])
             )
+            # set([0, 1, 5, 11, 15, 18, 24, 26, 29])
+            # set([0, 5, 11, 15, 18, 24, 26, 29]
         )
         self.goal = self.dataset.goal
+        self.fixed_ori = self.dataset.fixed_ori
         self.desired_value = None
 
     def load_skill_ds_params(self):
@@ -109,7 +112,7 @@ class CALVINSkill:
 
     def sample_start(self, size=1, sigma=0.15):
         rand_idx = np.random.choice(self.val_starts_good_ones, size=1)[0]
-        return self.val_dataset.X.numpy()[rand_idx, 0, :3]
+        return self.val_dataset.X.numpy()[rand_idx, 3, :3]
         # start = self.dataset.start
         # sampled = self.sample_gaussian_norm_ball(start, sigma, size)
         # if size == 1:

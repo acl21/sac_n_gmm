@@ -49,6 +49,7 @@ class SeqBlendPLTrianer(object):
             "num_seed_steps": self.cfg.num_seed_steps,
             "accumulate_env_steps": self.cfg.accumulate_env_steps,
             "max_episode_steps": self.cfg.max_episode_steps,
+            "sparse_rewards": self.cfg.sparse_rewards,
             "batch_size": self.cfg.rl.batch_size,
             "lr_actor": self.cfg.rl.actor_lr,
             "lr_critic": self.cfg.rl.critic_lr,

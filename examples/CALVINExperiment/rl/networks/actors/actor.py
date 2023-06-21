@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from examples.CALVINExperiment.rl.networks.utils.distributions import TanhNormal
+from torch.distributions.normal import Normal
 
 
 LOG_SIG_MAX = 2
@@ -54,18 +54,21 @@ class Actor(nn.Module):
         state,
         deterministic=False,
         reparameterize=False,
+        epsilon=1e-6,
     ):
         mean, std = self.forward(state)
         if deterministic:
             actions = torch.tanh(mean)
             log_pi = torch.zeros_like(actions)
         else:
-            tanh_normal = TanhNormal(mean, std)
+            normal = Normal(mean, std)
             if reparameterize:
-                actions, log_pi = tanh_normal.rsample_and_logprob()
+                z = normal.rsample()
             else:
-                actions, log_pi = tanh_normal.sample_and_logprob()
-            return actions, log_pi
+                z = normal.sample()
+            actions = torch.tanh(z)
+            log_pi = normal.log_prob(z) - torch.log(1 - actions.square() + epsilon)
+            log_pi = log_pi.sum(-1, keepdim=True)
         return self.scale_actions(actions), log_pi
 
     def scale_actions(self, action):

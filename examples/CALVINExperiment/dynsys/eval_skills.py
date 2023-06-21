@@ -53,7 +53,8 @@ class SkillEvaluator(object):
                 goal = 0
             rollout_return = 0
             observation = self.env.reset()
-            desired_start = xi[0, 10, :].numpy()
+            desired_start = xi[0, 0, :].numpy()
+            # desired_start = np.array([-0.07181071, -0.00762308, 0.52871225]) # where move_slider succeeds
             max_checks = 50
             error_margin = 0.01
             count = 0
@@ -69,8 +70,7 @@ class SkillEvaluator(object):
                 count += 1
                 if count >= max_checks:
                     self.logger.info(
-                        f"CALVIN is struggling to place the EE at the right initial pose. \
-                            Difference: {np.linalg.norm(observation[:state_size] - desired_start)}"
+                        f"CALVIN is struggling to place the EE at the right initial pose. Difference: {np.round(np.linalg.norm(observation[:state_size] - desired_start), 2)}"
                     )
                     break
 
@@ -115,8 +115,8 @@ class SkillEvaluator(object):
                     self.env.record_frame()
                 if render:
                     self.env.render()
-                # if done:
-                #     break
+                if done:
+                    break
                 # if np.round(dist_to_goal, 2) <= 0.01:
                 # break
             status = None

@@ -40,8 +40,7 @@ class TaskEvaluator(object):
 
         observation = self.env.reset()
         x = self.calibrate_EE_start_state(ds, observation, start_point_sigma=0.05)
-
-        gap = np.linalg.norm(x[:3] - ds[0].dataset.start)
+        gap = np.linalg.norm(x[:3] - ds[0].dataset.goal)
         idx = 0
         for step in range(max_steps):
             # Manually switch the DS after some time.
@@ -61,9 +60,19 @@ class TaskEvaluator(object):
             if render:
                 self.env.render()
             # Premature exit when close to skill's goal
-            dist_to_goal = np.linalg.norm(observation[:3] - ds[idx].goal)
-            if dist_to_goal <= 0.01:
-                idx += 1
+            # dist_to_goal = np.linalg.norm(observation[:3] - ds[idx].goal)
+            # print(
+            #     step,
+            #     idx,
+            #     np.round(dist_to_goal, 2),
+            #     dist_to_goal,
+            #     self.env.completed_tasks,
+            #     observation[10:].round(2),
+            # )
+            idx = len(self.env.completed_tasks)
+            # if np.round(dist_to_goal, 2) <= 0.02:
+            #     idx += 1
+            #     print("idx", idx)
             if done:
                 break
             # print(step, delta_x, info['completed_tasks'])

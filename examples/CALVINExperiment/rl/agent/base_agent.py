@@ -228,7 +228,7 @@ class Agent(object):
             size=1, sigma=0.05
         )  # From val_dataset
         count = 0
-        state = np.append(desired_start, np.append(self.fixed_ori, -1))
+        state = np.append(desired_start, np.append(self.skill_ds[0].fixed_ori, -1))
         action = self.env.prepare_action(state, action_type="abs")
         while np.linalg.norm(obs[:3] - desired_start) > error_margin:
             obs, _, _, _ = self.env.step(action)

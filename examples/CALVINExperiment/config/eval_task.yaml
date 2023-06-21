@@ -8,9 +8,9 @@ defaults:
 
 
 # Task params
-target_tasks: ['open_drawer', 'close_drawer']
+target_tasks: ['open_drawer', 'turn_on_lightbulb', 'move_slider_left']
 task_sequential: true
-sparse_rewards: true # true (reward only for successful full task) or false (reward for successful sub tasks also)
+sparse_rewards: false # true (reward only for successful full task) or false (reward for successful sub tasks also)
 
 # Task Demos
 demos_dir: ${root}/examples/CALVINExperiment/data/demos
@@ -21,6 +21,8 @@ task: ${target_tasks}
 # Environment params
 render: false
 record: false
+
+max_steps: 400
 
 # WANDB Logging Params
 wandb: false

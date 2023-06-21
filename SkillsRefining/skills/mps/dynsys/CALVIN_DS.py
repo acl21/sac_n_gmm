@@ -48,11 +48,11 @@ class CALVINDynSysDataset(Dataset):
         start_idx, end_idx = self.get_valid_columns(self.state_type)
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
-        # Get the last orientation from the trajectory (when skill usually completes)
-        # (this can be bad for orientation dependant tasks)
-        s_idx, e_idx = self.get_valid_columns("ori")
-        temp_ori = np.load(self.data_file)[:, :, s_idx:e_idx]
-        self.fixed_ori = temp_ori[0, -1, :]
+        # Get the euler angles best for the skill
+        if self.skill in ["open_drawer", "close_drawer", "turn_on_led"]:
+            self.fixed_ori = np.array([3.142, 0.08, 1.5])
+        elif self.skill in ["turn_on_lightbulb", "move_slider_left"]:
+            self.fixed_ori = np.array([3.0, -0.4, 1.5])
 
         # Convert Euler orientations to Quaternion when asked
         if self.state_type == "ori" and is_quaternion:
