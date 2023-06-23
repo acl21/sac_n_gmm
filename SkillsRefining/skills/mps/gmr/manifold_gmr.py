@@ -46,9 +46,14 @@ def manifold_gmr(
     # Compute weights
     for n in range(nb_data):
         for k in range(nb_states):
+            logmap_mean_input = in_manifold.log(
+                gmm_means[k][in_manifold_idx], input_data[n]
+            )
+            if isinstance(in_manifold, Product):
+                logmap_mean_input = np.hstack(logmap_mean_input)
             H[k, n] = gmm_priors[k] * multivariate_normal(
-                in_manifold.log(gmm_means[k][in_manifold_idx], input_data[n]),
-                np.zeros_like(input_data[n]),
+                logmap_mean_input,
+                np.zeros_like(logmap_mean_input),
                 gmm_covariances[k][in_idx][:, in_idx],
                 log=False,
             )
@@ -164,16 +169,16 @@ def manifold_gmr(
                     out_manifold, Product
                 ):
                     transport_to = [input_point, exp_data]
+                elif isinstance(in_manifold, Product) and not isinstance(
+                    out_manifold, Product
+                ):
+                    transport_to = [*input_point, exp_data]
+                elif not isinstance(in_manifold, Product) and isinstance(
+                    out_manifold, Product
+                ):
+                    transport_to = [input_point, *exp_data]
                 else:
-                    temp = []
-                    for x in reversed(exp_data):
-                        temp.insert(0, x)
-                    if input_point.ndim == 1:
-                        temp.insert(0, input_point)
-                    else:
-                        for x in reversed(input_point):
-                            temp.insert(0, x)
-                    transport_to = np.array(temp, dtype=object)
+                    transport_to = [*input_point, *exp_data]
 
                 for j in range(gmm_covariances_eigenvectors[k].shape[1]):
                     # Transport
@@ -259,20 +264,21 @@ def manifold_gmr(
             # Transportation of covariance from mean to expected output
             # Parallel transport of the eigenvectors weighted by the square root of the eigenvalues
             trsp_eigvec = np.zeros_like(gmm_covariances_eigenvectors[k])
+
             if not isinstance(in_manifold, Product) and not isinstance(
                 out_manifold, Product
             ):
                 transport_to = [input_point, exp_data]
+            elif isinstance(in_manifold, Product) and not isinstance(
+                out_manifold, Product
+            ):
+                transport_to = [*input_point, exp_data]
+            elif not isinstance(in_manifold, Product) and isinstance(
+                out_manifold, Product
+            ):
+                transport_to = [input_point, *exp_data]
             else:
-                temp = []
-                for x in reversed(exp_data):
-                    temp.insert(0, x)
-                if input_point.ndim == 1:
-                    temp.insert(0, input_point)
-                else:
-                    for x in reversed(input_point):
-                        temp.insert(0, x)
-                transport_to = np.array(temp, dtype=object)
+                transport_to = [*input_point, *exp_data]
 
             for j in range(gmm_covariances_eigenvectors[k].shape[1]):
                 # Transport
