@@ -48,6 +48,11 @@ class CALVINDynSysDataset(Dataset):
         start_idx, end_idx = self.get_valid_columns(self.state_type)
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
+        # Ignore trajectories that do not succeed in the env
+        ignore_indices = []
+        ignore_indices = self.get_ignore_indices()
+        self.X = np.delete(self.X, ignore_indices, axis=0)
+
         # Get the euler angles best for the skill
         if self.skill in ["open_drawer", "close_drawer", "turn_on_led"]:
             self.fixed_ori = np.array([3.142, 0.08, 1.5])
@@ -83,8 +88,9 @@ class CALVINDynSysDataset(Dataset):
             self.X = self.normalize(self.X)
 
         # Get first order derivative dX from X
-        self.dX = (self.X[:, 2:, :] - self.X[:, :-2, :]) / self.dt
-        self.X = self.X[:, 1:-1, :]
+        self.dX = np.empty((self.X.shape[0], self.X.shape[1], self.X.shape[2]))
+        self.dX[:, :-1, :] = (self.X[:, 1:, :] - self.X[:, :-1, :]) / self.dt
+        self.dX[:, -1, :] = np.zeros(self.dX.shape[-1])
 
         self.X = torch.from_numpy(self.X).type(torch.FloatTensor)
         self.dX = torch.from_numpy(self.dX).type(torch.FloatTensor)
@@ -123,3 +129,130 @@ class CALVINDynSysDataset(Dataset):
         elif "grip" in state_type:
             start, end = 7, 8
         return start, end
+
+    def get_ignore_indices(self):
+        ignore_indices = []
+        if self.skill == "open_drawer":
+            ignore_indices = [3, 8, 47, 61, 72, 78, 81, 85, 99, 108, 129, 134, 149]
+        elif self.skill == "turn_on_lightbulb":
+            ignore_indices = [
+                0,
+                1,
+                9,
+                19,
+                20,
+                22,
+                23,
+                25,
+                27,
+                30,
+                32,
+                34,
+                36,
+                37,
+                45,
+                46,
+                54,
+                63,
+                70,
+                73,
+                76,
+                80,
+                82,
+                86,
+                87,
+                89,
+                90,
+                92,
+                98,
+                102,
+                103,
+                104,
+                107,
+                110,
+                116,
+                117,
+                124,
+                129,
+            ]
+        elif self.skill == "move_slider_left":
+            ignore_indices = [
+                3,
+                5,
+                9,
+                10,
+                12,
+                13,
+                17,
+                18,
+                20,
+                21,
+                22,
+                29,
+                30,
+                33,
+                35,
+                36,
+                37,
+                38,
+                39,
+                40,
+                43,
+                44,
+                46,
+                47,
+                49,
+                51,
+                54,
+                56,
+                57,
+                61,
+                62,
+                68,
+                69,
+                70,
+                71,
+                72,
+                73,
+                75,
+                76,
+                78,
+                79,
+                80,
+                85,
+                87,
+                89,
+                90,
+                93,
+                94,
+                96,
+                97,
+                98,
+                99,
+                100,
+                101,
+                107,
+                108,
+                109,
+                111,
+                113,
+                114,
+                119,
+                122,
+                124,
+                128,
+                132,
+                133,
+                137,
+                140,
+                141,
+                142,
+                143,
+                144,
+            ]
+
+        elif self.skill == "turn_on_led":
+            ignore_indices = [0, 3, 33, 74, 83, 87, 98]
+        else:
+            print("Must ignore trajectory that do not succeed in the env!")
+        return ignore_indices
