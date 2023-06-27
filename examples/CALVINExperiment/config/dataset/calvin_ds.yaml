@@ -8,3 +8,4 @@ dt: ${dt}
 sampling_dt: ${sampling_dt}
 normalized: ${normalized}
 is_quaternion: ${is_quaternion}
+ignore_bad_demos: ${ignore_bad_demos}

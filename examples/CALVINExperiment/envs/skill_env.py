@@ -65,6 +65,8 @@ class SkillSpecificEnv(PlayTableSimEnv):
         robot_obs, robot_info = self.robot.get_observation()
         if self.state_type == "pos":
             obs = robot_obs[:3]
+        elif self.state_type == "pos_ori":
+            obs = robot_obs[:6]
         else:
             obs = robot_obs[8:15]
         return np.concatenate([obs, robot_obs[-1:]])

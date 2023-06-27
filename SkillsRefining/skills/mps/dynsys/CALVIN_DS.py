@@ -21,6 +21,7 @@ class CALVINDynSysDataset(Dataset):
         sampling_dt=1 / 30,
         normalized=False,
         is_quaternion=False,
+        ignore_bad_demos=False,
     ):
         self.skill = skill
         self.state_type = state_type
@@ -49,9 +50,10 @@ class CALVINDynSysDataset(Dataset):
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
         # Ignore trajectories that do not succeed in the env
-        ignore_indices = []
-        ignore_indices = self.get_ignore_indices()
-        self.X = np.delete(self.X, ignore_indices, axis=0)
+        if ignore_bad_demos:
+            ignore_indices = []
+            ignore_indices = self.get_bad_demo_indices()
+            self.X = np.delete(self.X, ignore_indices, axis=0)
 
         # Get the euler angles best for the skill
         if self.skill in ["open_drawer", "close_drawer", "turn_on_led"]:
@@ -130,28 +132,28 @@ class CALVINDynSysDataset(Dataset):
             start, end = 7, 8
         return start, end
 
-    def get_ignore_indices(self):
+    def get_bad_demo_indices(self):
         ignore_indices = []
         if self.skill == "open_drawer":
-            ignore_indices = [3, 8, 47, 61, 72, 78, 81, 85, 99, 108, 129, 134, 149]
+            ignore_indices = [3, 61, 72, 78, 85, 108, 129]
         elif self.skill == "turn_on_lightbulb":
             ignore_indices = [
                 0,
                 1,
-                9,
+                3,
                 19,
                 20,
                 22,
                 23,
                 25,
                 27,
-                30,
                 32,
                 34,
                 36,
                 37,
                 45,
                 46,
+                53,
                 54,
                 63,
                 70,
@@ -173,11 +175,11 @@ class CALVINDynSysDataset(Dataset):
                 116,
                 117,
                 124,
-                129,
+                128,
             ]
         elif self.skill == "move_slider_left":
             ignore_indices = [
-                3,
+                2,
                 5,
                 9,
                 10,
@@ -188,51 +190,42 @@ class CALVINDynSysDataset(Dataset):
                 20,
                 21,
                 22,
-                29,
-                30,
-                33,
+                24,
                 35,
                 36,
                 37,
                 38,
                 39,
-                40,
                 43,
                 44,
                 46,
-                47,
                 49,
                 51,
                 54,
                 56,
-                57,
                 61,
                 62,
-                68,
                 69,
                 70,
                 71,
                 72,
                 73,
                 75,
-                76,
                 78,
                 79,
                 80,
-                85,
+                83,
                 87,
                 89,
                 90,
                 93,
                 94,
-                96,
                 97,
                 98,
                 99,
                 100,
                 101,
                 107,
-                108,
                 109,
                 111,
                 113,
@@ -241,16 +234,11 @@ class CALVINDynSysDataset(Dataset):
                 122,
                 124,
                 128,
-                132,
+                130,
                 133,
-                137,
-                140,
-                141,
                 142,
-                143,
                 144,
             ]
-
         elif self.skill == "turn_on_led":
             ignore_indices = [0, 3, 33, 74, 83, 87, 98]
         else:

@@ -41,8 +41,11 @@ class SkillEvaluatorDemos(object):
         state_size = 0
         if self.cfg.state_type == "pos":
             state_size = 3
+        elif self.cfg.state_type == "pos_ori":
+            state_size = 6
         else:
             state_size = 7
+        bad = []
         for idx, (xi, d_xi) in enumerate(dataloader):
             if (idx % 5 == 0) or (idx == len(dataset)):
                 self.logger.info(f"Test Trajectory {idx+1}/{len(dataset)}")
@@ -50,21 +53,24 @@ class SkillEvaluatorDemos(object):
             rollout_return = 0
             observation = self.env.reset()
             if dataset.state_type == "pos":
-                x = np.append(x0, np.append(dataset.fixed_ori, -1))
+                x = np.append(x0[:3], np.append(dataset.fixed_ori, -1))
             else:
                 x = np.append(x0, -1)
             action = self.env.prepare_action(x, action_type="abs")
 
             # self.logger.info(f'Adjusting EE position to match the initial pose from the dataset')
-            max_checks = 50
+            max_checks = 100
             count = 0
             error_margin = 0.01
-            while np.linalg.norm(observation[:state_size] - x0) > error_margin:
+            while (
+                np.linalg.norm(observation[:state_size] - x0[:state_size])
+                > error_margin
+            ):
                 observation, reward, done, info = self.env.step(action)
                 count += 1
                 if count >= max_checks:
                     self.logger.info(
-                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.linalg.norm(observation[:state_size] - x0)}"
+                        f"CALVIN is struggling to place the EE at the right initial pose. The gap is {np.linalg.norm(observation[:state_size] - x0[:state_size])}"
                     )
                     break
             # self.logger.info(f'Simulating with Data')
@@ -95,8 +101,10 @@ class SkillEvaluatorDemos(object):
                 succesful_rollouts += 1
                 status = "Success"
             else:
-                status = "Fail"
-            self.logger.info(f"{idx+1}: {status}!")
+                status = f"{idx}: Fail"
+                self.logger.info(f"{status}!")
+                bad.append(idx)
+            # self.logger.info(f"{status}!")
             if record:
                 self.logger.info("Saving Robot Camera Obs")
                 video_path = self.env.save_recording()
@@ -123,6 +131,7 @@ class SkillEvaluatorDemos(object):
                     "average_traj_len": np.mean(rollout_lengths),
                 }
             )
+        self.logger.info(bad)
         return acc, np.mean(rollout_returns), np.mean(rollout_lengths)
 
     def run(self):

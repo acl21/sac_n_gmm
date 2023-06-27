@@ -12,6 +12,7 @@ dt: 0.0666
 sampling_dt: 0.0333
 normalized: false
 is_quaternion: false
+ignore_bad_demos: false
 
 # Evaluation and DS params
 max_steps: 240
