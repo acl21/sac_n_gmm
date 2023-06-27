@@ -7,6 +7,6 @@ use_egl: false
 
 defaults:
   - cameras@cameras: static_only
-  - scene@scene_cfg: calvin_scene_D
+  - scene@scene_cfg: calvin_scene_D_noblocks
   - robot@robot_cfg: panda_longer_finger
   - tasks@tasks: customized_tasks

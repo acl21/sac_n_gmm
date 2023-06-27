@@ -61,12 +61,17 @@ class CALVINDynSysDataset(Dataset):
         elif self.skill in ["turn_on_lightbulb", "move_slider_left"]:
             self.fixed_ori = np.array([3.0, -0.4, 1.5])
 
-        # Convert Euler orientations to Quaternion when asked
-        if self.state_type == "ori" and is_quaternion:
-            self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
-        elif self.state_type == "pos_ori" and is_quaternion:
-            oris = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X[:, :, 3:])
-            self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
+        # Convert fixed ori from Euler to Quaternion when flagged
+        # Convert Euler orientations in self.X to Quaternion when flagged
+        if is_quaternion:
+            self.fixed_ori = np.array(p.getQuaternionFromEuler(self.fixed_ori))
+            if self.state_type == "ori":
+                self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
+            elif self.state_type == "pos_ori":
+                oris = np.apply_along_axis(
+                    p.getQuaternionFromEuler, -1, self.X[:, :, 3:]
+                )
+                self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
         # Average end point i.e., goal of the trajectory (useful during inference)
         if "joint" not in self.state_type:
