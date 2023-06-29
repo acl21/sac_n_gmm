@@ -1,10 +1,11 @@
-numpy
-scipy
 matplotlib
+pillow
+scikit-image
+funcsigs
 torch
-cvxpy
-qpth
-roboticstoolbox-python
-
--e .
-
+torchvision
+pandas
+gdown
+mujoco
+gym==0.23.1
+setuptools==57.5.0
