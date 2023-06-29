@@ -9,3 +9,5 @@ gdown
 mujoco
 gym==0.23.1
 setuptools==57.5.0
+pymanopt
+mayavi

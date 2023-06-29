@@ -34,6 +34,10 @@ class SkillTrainer(Trainer):
             from skimo_agent import SkiMoAgent
 
             return SkiMoAgent
+        if algo == 'seqref':
+            from seqref_agent import SeqRefAgent
+
+            return SeqRefAgent
         return super()._get_agent_by_name(algo)
 
     def train(self):

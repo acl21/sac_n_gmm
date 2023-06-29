@@ -16,7 +16,7 @@ class SkillRLRun(Run):
             super()._set_run_name()
 
     def _get_trainer(self):
-        if self._cfg.rolf.name in ["spirl_dreamer", "spirl_tdmpc", "skimo"]:
+        if self._cfg.rolf.name in ["spirl_dreamer", "spirl_tdmpc", "skimo", "seqref"]:
             from skill_trainer import SkillTrainer
 
             return SkillTrainer(self._cfg)
@@ -34,7 +34,7 @@ def main(cfg: DictConfig) -> None:
 
     # Change default config
     cfg.wandb_entity = "in-ac"
-    cfg.wandb_project = "skimo-main"
+    cfg.wandb_project = "seqref"
 
     # Execute training code
     SkillRLRun(cfg).run()
