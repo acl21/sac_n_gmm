@@ -11,6 +11,7 @@ wandb
 /test/
 /img/
 /backlog/
+/outputs/
 
 
 # Data
@@ -18,6 +19,7 @@ wandb
 /data/maze_TA/
 /data/calvin/
 /data/*.gz
+/data/demos/
 /*.csv
 /*.ini
 /*.npy
@@ -26,6 +28,8 @@ wandb
 /*.hdf5
 /*screenlog*
 
+# Skill parameters
+/skills/
 
 # Mujoco
 MUJOCO_LOG.TXT

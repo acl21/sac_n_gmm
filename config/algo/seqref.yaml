@@ -7,14 +7,14 @@ name: seqref
 phase: pretrain
 
 # SkiMo (Not needed?)
-n_skill: 10
+n_skill: 4
 skill_horizon: 10
 skill_dim: 10
 
 # Pretraining
 pretrain:
   skills: ["open_drawer", "turn_on_lightbulb", "move_slider_left", "turn_on_led"]
-  skills_dir: "/home/lagandua/projects/seqref/skills/"
+  skills_dir: "/home/lagandua/projects/skimo_base/refining-skill-sequences/skills/"
   # GMM params
   gmm_components: 3
   plot_gmm: true
@@ -22,12 +22,23 @@ pretrain:
   # DynSys dataset params
   dataset:
     input_type: "pos" # or "pos_ori" or "joint"
-    demos_dir: "/home/lagandua/projects/seqref/data/demos"
+    demos_dir: "/home/lagandua/projects/skimo_base/refining-skill-sequences/data/demos"
     goal_centered: true
     is_quaternion: true
     train: true
+    ignore_bad_demos: true
   # Dynamics model
   learn_model: true
+  # Default ones from skimo
+  max_global_step: 200000
+  train_iter: 5
+  log_every: 10
+  evaluate_every: 100
+  ckpt_every: 1000
+  batch_size: 256
+  split: {train: 0.99, val: 0.01, test: 0.0}
+  n_vis: 1
+  data_path: null
 
 
 

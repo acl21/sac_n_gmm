@@ -19,7 +19,7 @@ class SkillTrainer(Trainer):
         super().__init__(cfg)
 
         if cfg.env.id == "maze":
-            self._overlay = imageio.imread(f"envs/assets/maze_40.png")
+            self._overlay = imageio.imread("envs/assets/maze_40.png")
 
     def _get_agent_by_name(self, algo):
         if algo == "spirl_dreamer":
@@ -34,7 +34,7 @@ class SkillTrainer(Trainer):
             from skimo_agent import SkiMoAgent
 
             return SkiMoAgent
-        if algo == 'seqref':
+        if algo == "seqref":
             from seqref_agent import SeqRefAgent
 
             return SeqRefAgent
@@ -148,7 +148,9 @@ class SkillTrainer(Trainer):
             fig = plt.figure()
 
             plt.imshow(
-                self._overlay, alpha=0.3, extent=(0, 40, 0, 40),
+                self._overlay,
+                alpha=0.3,
+                extent=(0, 40, 0, 40),
             )
             plt.xlim(0, 40)
             plt.ylim(0, 40)
@@ -180,7 +182,8 @@ class SkillTrainer(Trainer):
                 return
 
             wandb.log(
-                {f"test_ep{name}/replay_vis": wandb.Image(fig)}, step=step,
+                {f"test_ep{name}/replay_vis": wandb.Image(fig)},
+                step=step,
             )
             plt.close(fig)
 
@@ -238,6 +241,7 @@ class SkillTrainer(Trainer):
         # plt.savefig(f"{self._cfg.run_name}_{step}_heatmap_eval.png")
 
         wandb.log(
-            {f"test_ep/value_heatmap": wandb.Image(fig)}, step=step,
+            {"test_ep/value_heatmap": wandb.Image(fig)},
+            step=step,
         )
         plt.close(fig)

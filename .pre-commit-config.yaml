@@ -1,0 +1,14 @@
+default_language_version:
+    python: python3.8
+repos:
+  - repo: https://github.com/psf/black
+    rev: 23.3.0
+    hooks:
+      - id: black
+        language_version: python3.8
+        exclude: (calvin|rolf|spirl|d4rl)/
+  - repo: https://github.com/PyCQA/flake8
+    rev: 6.0.0
+    hooks:
+    -   id: flake8
+        exclude: (calvin|rolf|spirl|d4rl)/

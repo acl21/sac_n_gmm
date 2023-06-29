@@ -1,3 +1,4 @@
+import os
 import numpy as np
 from pymanopt.manifolds import Euclidean, Sphere, Product
 
@@ -9,9 +10,6 @@ from lib.dynsys.manifold_gmr import manifold_gmr
 from lib.dynsys.utils.plot_utils import visualize_3d_gmm
 from lib.dynsys.calvin_dynsys_dataset import CALVINDynSysDataset
 
-import wandb
-import logging
-
 
 class ManifoldGMM(object):
     def __init__(self, skill, cfg):
@@ -19,20 +17,23 @@ class ManifoldGMM(object):
         self.n_comp = cfg.gmm_components
         self.plot = cfg.plot_gmm
         self.wandb = cfg.wandb
-        self.skills_dir = cfg.skills_dir
 
         # Data and Manifold
         self.dataset = CALVINDynSysDataset(
             skill=self.skill,
             train=cfg.dataset.train,
-            state_type=cfg.dataset.dynsys_input_type,
+            state_type=cfg.dataset.input_type,
             demos_dir=cfg.dataset.demos_dir,
-            goal_centered=True,
-            is_quaternion=True,
+            goal_centered=cfg.dataset.goal_centered,
+            is_quaternion=cfg.dataset.is_quaternion,
+            ignore_bad_demos=cfg.dataset.ignore_bad_demos,
         )
-        self.state_type = cfg.dataset.dynsys_input_type
+        self.dataset.X = self.dataset.X.numpy()
+        self.dataset.dX = self.dataset.dX.numpy()
+
+        self.state_type = cfg.dataset.input_type
         self.dim = self.dataset.X.shape[-1]
-        self.manifold = self.create_manifold(self.dim)
+        self.manifold = self.create_manifold()
 
         # Goal state
         self.goal = self.dataset.goal
@@ -43,9 +44,11 @@ class ManifoldGMM(object):
         self.priors = None
         self.assignments = None
 
-        # Misc
-        self.logs_outdir = None
-        self.logger = logging.getLogger("ManifoldGMM")
+        # Directory where GMM params are saved
+        self.skills_dir = os.path.join(
+            cfg.skills_dir, self.state_type, self.skill, "manifoldgmm"
+        )
+        os.makedirs(self.skills_dir, exist_ok=True)
 
     def create_manifold(
         self,
@@ -80,33 +83,42 @@ class ManifoldGMM(object):
             data[n] = [X[n], Y[n]]
         return data
 
-    def load_params(self, filename="/gmm_params.npz"):
-        self.logger.info(f"Loading GMM params from {self.skills_dir + filename}")
-        gmm = np.load(self.skills_dir + filename)
+    def load_params(self, logger, filename="/weights.npz"):
+        weights_file = self.skills_dir + filename
+        if not os.path.exists(weights_file):
+            raise FileNotFoundError(
+                f"Could not find Manifold GMM params at {weights_file}"
+            )
+        else:
+            f"Loading Manifold GMM params for {self.skill} from {weights_file}"
+        gmm = np.load(weights_file)
         gmm.allow_pickle = True
-        self.means = np.array(gmm["gmm_means"])
-        self.covariances = np.array(gmm["gmm_covariances"])
-        self.priors = np.array(gmm["gmm_priors"])
+        self.means = np.array(gmm["means"])
+        self.covariances = np.array(gmm["covariances"])
+        self.priors = np.array(gmm["priors"])
 
-    def save_params(self, filename="/gmm_params.npz"):
+    def save_params(self, logger, filename="/weights.npz"):
+        weights_file = self.skills_dir + filename
         np.savez(
-            self.skills_dir + filename,
-            gmm_means=self.means,
-            gmm_covariances=self.covariances,
-            gmm_priors=self.priors,
+            weights_file,
+            means=self.means,
+            covariances=self.covariances,
+            priors=self.priors,
         )
-        self.logger.info(f"Saved GMM params at {self.skills_dir + filename}")
+        logger.info(f"Saved Manifold GMM params of {self.skill} at {weights_file}")
 
-    def train(self):
+    def train(self, logger):
         # Data
         data = self.prepare_training_data()
 
         # K-Means
+        logger.info("Manifold K-Means: Started")
         km_means, km_assignments = manifold_k_means(
-            self.manifold, self.data, nb_clusters=self.n_comp
+            self.manifold, np.copy(data), nb_clusters=self.n_comp, logger=logger
         )
+        logger.info("Manifold K-Means: Ended")
         # GMM
-        self.logger.info("Manifold GMM with K-Means priors")
+        logger.info("Manifold GMM with K-Means priors: Started")
         init_covariances = np.concatenate(
             self.n_comp * [np.eye(self.dim + self.dim)[None]], 0
         )
@@ -115,44 +127,51 @@ class ManifoldGMM(object):
             init_priors[k] = np.sum(km_assignments == k) / len(km_assignments)
         self.means, self.covariances, self.priors, self.assignments = manifold_gmm_em(
             self.manifold,
-            self.data,
+            np.copy(data),
             self.n_comp,
             initial_means=km_means,
             initial_covariances=init_covariances,
             initial_priors=init_priors,
-            logger=self.logger,
+            logger=logger,
         )
+        logger.info("Manifold GMM with K-Means priors: Ended")
 
         # Reshape means from (n_components, 2) to (n_components, 2, state_size)
         self.means = self.get_reshaped_means()
 
         # Save GMM params
-        self.save_params()
+        self.save_params(logger)
 
         # Plot GMM
         if self.plot:
             outfile = self.plot_gmm()
 
         if self.wandb:
-            config = {"n_comp": self.n_comp}
+            import wandb
+
+            config = {"n_comp": self.n_comp, "state_type": self.state_type}
             wandb.init(
                 project="seqref",
                 entity="in-ac",
-                name=f"pretrain_{self.dataset.skill}_{self.dataset.state_type}_ds",
+                name=f"pretrain.gmm.{self.dataset.skill}",
                 config=config,
             )
             wandb.log({"GMM-Viz": wandb.Video(outfile)})
             wandb.finish()
 
-    def gmr(self, Xt):
-        mu_gmr, sigma_gmr, H = manifold_gmr(
-            Xt, self.manifold, self.means, self.covariances, self.priors
-        )
-        return mu_gmr, sigma_gmr, H
+        # Release dataset object (memory efficient?)
+        self.dataset = None
 
     def predict_dx(self, x):
+        """
+        Goal centers the input x and returns dx
+        """
         dx, _, __ = manifold_gmr(
-            x.reshape(1, -1), self.manifold, self.means, self.covariances, self.priors
+            (x - self.goal).reshape(1, -1),
+            self.manifold,
+            self.means,
+            self.covariances,
+            self.priors,
         )
         return dx
 
@@ -213,7 +232,7 @@ class ManifoldGMM(object):
         means = self.means
 
         # Pick 15 random datapoints from X to plot
-        points = self.dataset.X.numpy()[:, :, :3]
+        points = self.dataset.X[:, :, :3]
         rand_idx = np.random.choice(np.arange(0, len(points)), size=15)
         points = np.vstack(points[rand_idx, :, :])
         means = np.vstack(self.means[:, 0])

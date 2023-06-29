@@ -19,6 +19,7 @@ from rolf.networks.distributions import TanhNormal, mc_kl
 from rolf.networks.dreamer import DenseDecoderTanh, ActionDecoder, Decoder
 from rolf.networks.tdmpc_model import TDMPCModel, Encoder, LSTMEncoder
 
+from lib.dynsys.manifold_gmm_agent import ManifoldGMMSkillAgent
 from seqref_rollout import SeqRefRolloutRunner
 
 
@@ -124,26 +125,12 @@ class SeqRefSkillAgent(BaseAgent):
 
         self._ac_dim = ac_dim = gym.spaces.flatdim(self._ac_space)
         hidden_dims = [cfg.num_units] * cfg.num_layers
-        self.encoder = Encoder(cfg.encoder, ob_space, cfg.state_dim)
-
-        if cfg.lstm:
-            skill_input_dim = ac_dim + cfg.state_dim
-            self.skill_encoder = LSTMEncoder(
-                skill_input_dim, cfg.skill_dim, cfg.lstm_units, 1, log_std=cfg.log_std
-            )
-        else:
-            skill_input_dim = cfg.skill_horizon * ac_dim + cfg.state_dim
-            self.skill_encoder = DenseDecoderTanh(
-                skill_input_dim, cfg.skill_dim, hidden_dims, cfg.dense_act, cfg.log_std
-            )
-        self.actor = ActionDecoder(
-            cfg.state_dim + cfg.skill_dim,
-            ac_dim,
-            hidden_dims,
-            cfg.dense_act,
-            cfg.log_std,
-        )
+        # CALVIN Skill like class to manage DS input and output
+        self.agent = ManifoldGMMSkillAgent(cfg.pretrain)
         self.to(self._device)
+
+    def train(self):
+        self.agent.train()
 
     def state_dict(self):
         return {
@@ -154,9 +141,9 @@ class SeqRefSkillAgent(BaseAgent):
         }
 
     def load_state_dict(self, ckpt):
-        self.actor.load_state_dict(ckpt["actor"])
-        self.encoder.load_state_dict(ckpt["encoder"])
-        self.skill_encoder.load_state_dict(ckpt["skill_encoder"])
+        # self.actor.load_state_dict(ckpt["actor"])
+        # self.encoder.load_state_dict(ckpt["encoder"])
+        # self.skill_encoder.load_state_dict(ckpt["skill_encoder"])
         self.to(self._device)
 
     @property
@@ -216,17 +203,31 @@ class SeqRefAgent(BaseAgent):
         self.skill_agent = SeqRefSkillAgent(cfg, ob_space, ac_space)
         self._aug = RandomShiftsAug()
 
-        self._build_optims()
-        self._build_buffers()
-        self._log_creation()
+        self.gmm_is_trained = False
+        if self.gmm_is_trained:
+            self.skill_agent.load_params()
+        else:
+            self.skill_agent.train()
+            self.gmm_is_trained = True
+
+        # The high level policy is regularized by a skill prior.
+        # if cfg.phase == "rl":
+        #     # self.skill_prior = SkiMoMetaAgent(cfg, ob_space, meta_ac_space)
+        #     self.log_alpha = torch.tensor(
+        #         np.log(cfg.alpha_init), device=self._device, requires_grad=True
+        #     )
+
+        # self._build_optims()
+        # self._build_buffers()
+        # self._log_creation()
 
         # Load pretrained model.
-        if cfg.phase == "rl" and cfg.pretrain_ckpt_path is not None:
-            Logger.warning(f"Load pretrained checkpoint {cfg.pretrain_ckpt_path}")
-            ckpt = torch.load(cfg.pretrain_ckpt_path, map_location=self._device)
-            ckpt = ckpt["agent"]
-            ckpt["skill_prior"] = ckpt["meta_agent"].copy()
-            self.load_state_dict(ckpt)
+        # if cfg.phase == "rl" and cfg.pretrain_ckpt_path is not None:
+        #     Logger.warning(f"Load pretrained checkpoint {cfg.pretrain_ckpt_path}")
+        #     ckpt = torch.load(cfg.pretrain_ckpt_path, map_location=self._device)
+        #     ckpt = ckpt["agent"]
+        #     ckpt["skill_prior"] = ckpt["meta_agent"].copy()
+        #     self.load_state_dict(ckpt)
 
     def get_runner(self, cfg, env, env_eval):
         return SeqRefRolloutRunner(cfg, env, env_eval, self)
@@ -241,9 +242,15 @@ class SeqRefAgent(BaseAgent):
         self.hl_buffer = ReplayBufferEpisode(
             buffer_keys, cfg.buffer_size, sampler.sample_func_one_more_ob, cfg.precision
         )
+        # buffer_keys = ["ob", "meta_ac", "ac", "rew", "done"]
+        # sampler = SeqSampler(self._horizon)
+        # self.ll_buffer = ReplayBufferEpisode(
+        #     buffer_keys, cfg.buffer_size, sampler.sample_func_one_more_ob, cfg.precision
+        # )
         self.meta_agent.set_buffer(self.hl_buffer)
+        # self.skill_agent.set_buffer(self.ll_buffer)
 
-        # Load data for pre-training of latent dynamics model.
+        # Load data for pre-training.
         buffer_keys = ["ob", "ac", "done"]
         sampler = SeqSampler(self._horizon + 1)
         self._pretrain_buffer = ReplayBufferEpisode(
@@ -269,20 +276,30 @@ class SeqRefAgent(BaseAgent):
             else:
                 self._pretrain_val_buffer.store_episode(new_d, False)
 
+        if cfg.env == "maze":
+            self._overlay = imageio.imread("envs/assets/maze_40.png")
+
     def _log_creation(self):
-        Logger.info("Creating a SeqRef agent (TD-MPC)")
+        Logger.info("Creating a SkiMo agent (TD-MPC)")
 
     def _build_optims(self):
         cfg = self._cfg
         hl_agent = self.meta_agent
+        # ll_agent = self.skill_agent
         adam_amp = lambda model, lr: AdamAMP(
             model, lr, cfg.weight_decay, cfg.grad_clip, self._device, self._use_amp
         )
         self.hl_modules = [hl_agent.actor, hl_agent.model, hl_agent.decoder]
+        # self.ll_modules = [ll_agent.encoder, ll_agent.actor, ll_agent.skill_encoder]
 
         # Optimize the skill dynamics and skills jointly.
+        # if cfg.joint_training:
+        #     self.joint_modules = self.hl_modules + self.ll_modules
+        #     self.joint_optim = adam_amp(self.joint_modules, cfg.joint_lr)
+        # else:
         self.hl_model_optim = adam_amp([hl_agent.model, hl_agent.decoder], cfg.model_lr)
         self.hl_actor_optim = adam_amp(hl_agent.actor, cfg.actor_lr)
+        # self.ll_actor_optim = adam_amp(self.ll_modules, cfg.actor_lr)
 
         if cfg.phase == "rl":
             actor_modules = [hl_agent.actor]
@@ -292,3 +309,370 @@ class SeqRefAgent(BaseAgent):
             self.actor_optim = adam_amp(actor_modules, cfg.actor_lr)
             self.model_optim = adam_amp(model_modules, cfg.model_lr)
             self.alpha_optim = adam_amp(self.log_alpha, cfg.alpha_lr)
+
+    def set_step(self, step):
+        self.meta_agent.set_step(step)
+        self.skill_agent.set_step(step)
+        self._step = step
+
+    def is_off_policy(self):
+        return True
+
+    def store_episode(self, rollouts):
+        self.hl_buffer.store_episode(rollouts[0], one_more_ob=True)
+        # self.ll_buffer.store_episode(rollouts[1], one_more_ob=True)
+
+    def buffer_state_dict(self):
+        return dict(
+            hl_buffer=self.hl_buffer.state_dict(),
+            # ll_buffer=self.ll_buffer.state_dict(),
+        )
+
+    def load_buffer_state_dict(self, state_dict):
+        self.hl_buffer.append_state_dict(state_dict["hl_buffer"])
+        # self.ll_buffer.append_state_dict(state_dict["ll_buffer"])
+
+    def state_dict(self):
+        ret = {
+            "meta_agent": self.meta_agent.state_dict(),
+            "skill_agent": self.skill_agent.state_dict(),
+            "ob_norm": self._ob_norm.state_dict(),
+        }
+
+        # if self._cfg.joint_training:
+        #     ret["joint_optim"] = self.joint_optim.state_dict()
+        # else:
+        ret["hl_model_optim"] = self.hl_model_optim.state_dict()
+        ret["hl_actor_optim"] = self.hl_actor_optim.state_dict()
+        # ret["ll_actor_optim"] = self.ll_actor_optim.state_dict()
+
+        if self._cfg.phase == "rl":
+            # ret["skill_prior"] = self.skill_prior.state_dict()
+            ret["actor_optim"] = self.actor_optim.state_dict()
+            ret["model_optim"] = self.model_optim.state_dict()
+            ret["log_alpha"] = self.log_alpha.cpu().detach().numpy()
+            ret["alpha_optim"] = self.alpha_optim.state_dict()
+        return ret
+
+    def load_state_dict(self, ckpt):
+        self.meta_agent.load_state_dict(ckpt["meta_agent"])
+        self.skill_agent.load_state_dict(ckpt["skill_agent"])
+        # if self._cfg.phase == "rl":
+        #     self.skill_prior.load_state_dict(ckpt["skill_prior"])
+
+        # if self._cfg.joint_training:
+        #     self.joint_optim.load_state_dict(ckpt["joint_optim"])
+        #     optimizer_cuda(self.joint_optim, self._device)
+        # else:
+        self.hl_model_optim.load_state_dict(ckpt["hl_model_optim"])
+        self.hl_actor_optim.load_state_dict(ckpt["hl_actor_optim"])
+        # self.ll_actor_optim.load_state_dict(ckpt["ll_actor_optim"])
+        optimizer_cuda(self.hl_model_optim, self._device)
+        optimizer_cuda(self.hl_actor_optim, self._device)
+        optimizer_cuda(self.ll_actor_optim, self._device)
+
+        if "model_optim" in ckpt:
+            self.model_optim.load_state_dict(ckpt["model_optim"])
+            self.actor_optim.load_state_dict(ckpt["actor_optim"])
+            self.log_alpha.data = torch.tensor(ckpt["log_alpha"], device=self._device)
+            self.alpha_optim.load_state_dict(ckpt["alpha_optim"])
+            optimizer_cuda(self.model_optim, self._device)
+            optimizer_cuda(self.actor_optim, self._device)
+            optimizer_cuda(self.alpha_optim, self._device)
+        self.to(self._device)
+
+    def preprocess(self, ob, aug=None):
+        ob = ob.copy()
+        for k, v in ob.items():
+            if len(v.shape) >= 4:
+                ob[k] = ob[k] / 255.0 - 0.5
+                if aug:
+                    ob[k] = aug(ob[k])
+            elif self._cfg.env == "maze":
+                shape = ob[k].shape
+                ob[k] = ob[k].view(-1, shape[-1])
+                ob[k] = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
+                ob[k] = ob[k].view(shape)
+        return ob
+
+    def update(self):
+        """Sample a batch from the replay buffer and make one model update in each iteration."""
+        train_info = Info()
+        sw_data, sw_train = StopWatch(), StopWatch()
+        train_iter = self._cfg.train_iter
+        if self.warm_up_training():
+            self.warm_up_iter = (
+                self._cfg.warm_up_step * self._cfg.train_iter // self._cfg.train_every
+            )
+            train_iter += self.warm_up_iter
+        for _ in range(train_iter):
+            sw_data.start()
+            batch = self.hl_buffer.sample(self._cfg.batch_size)
+            sw_data.stop()
+
+            sw_train.start()
+            _train_info = self._update_network(batch)
+            train_info.add(_train_info)
+            sw_train.stop()
+        Logger.info(f"Data: {sw_data.average():.3f}  Train: {sw_train.average():.3f}")
+
+        return train_info.get_dict()
+
+    def _update_network(self, batch):
+        """Updates skill dynamics model and high-level policy."""
+        cfg = self._cfg
+        info = Info()
+        mse = nn.MSELoss(reduction="none")
+        scalars = cfg.scalars
+        hl_agent = self.meta_agent
+        max_kl = cfg.max_divergence
+
+        if cfg.freeze_model:
+            hl_agent.model.encoder.requires_grad_(False)
+            hl_agent.model.dynamics.requires_grad_(False)
+
+        # ob: {k: BxTx`ob_dim[k]`}, ac: BxTx`ac_dim`, rew: BxTx1
+        o, ac, rew = batch["ob"], batch["ac"], batch["rew"]
+        done = batch["done"]
+        o = self.preprocess(o, aug=self._aug)
+
+        # Flip dimensions, BxT -> TxB
+        def flip(x, l=None):
+            if isinstance(x, dict):
+                return [{k: v[:, t] for k, v in x.items()} for t in range(l)]
+            else:
+                return x.transpose(0, 1)
+
+        hl_feat = flip(hl_agent.model.encoder(o))
+        # Avoid gradients for the skill prior and model target
+        with torch.no_grad():
+            sp_feat = flip(self.skill_prior.model.encoder(o))
+            hl_feat_target = flip(hl_agent.model_target.encoder(o))
+
+        ob = flip(o, cfg.n_skill + 1)
+        ac = flip(ac)
+        rew = flip(rew)
+        done = flip(done)
+
+        with torch.autocast(cfg.device, enabled=self._use_amp):
+            # Trians skill dynamics model.
+            z = z_next_pred = hl_feat[0]
+            rewards = []
+
+            consistency_loss = 0
+            reward_loss = 0
+            value_loss = 0
+            prior_divs = []
+            q_preds = [[], []]
+            q_targets = []
+            alpha = self.log_alpha.exp().detach()
+            for t in range(cfg.n_skill):
+                z = z_next_pred
+                z_next_pred, reward_pred = hl_agent.model.imagine_step(z, ac[t])
+                if cfg.sac:
+                    z = ob[t]["ob"]
+                q_pred = hl_agent.model.critic(z, ac[t])
+
+                with torch.no_grad():
+                    # `z` for contrastive learning
+                    z_next = hl_feat_target[t + 1]
+
+                    # `z` for `q_target`
+                    z_next_q = hl_feat[t + 1]
+                    ac_next_dist = hl_agent.actor(z_next_q)
+                    ac_next = ac_next_dist.rsample()
+                    if cfg.sac:
+                        z_next_q = ob[t + 1]["ob"]
+                    q_next = torch.min(*hl_agent.model_target.critic(z_next_q, ac_next))
+
+                    # Skill prior regularization.
+                    prior_dist = self.skill_prior.actor(sp_feat[t + 1])
+                    prior_div = torch.clamp(
+                        mc_kl(ac_next_dist, prior_dist), -max_kl, max_kl
+                    )
+
+                    prior_divs.append(prior_div)
+                    if cfg.use_prior and cfg.prior_reg_critic:
+                        q_next -= (cfg.fixed_alpha or alpha) * prior_div
+
+                    q_target = rew[t] + (1 - done[t].long()) * cfg.rl_discount * q_next
+                rewards.append(reward_pred.detach())
+                q_preds[0].append(q_pred[0].detach())
+                q_preds[1].append(q_pred[1].detach())
+                q_targets.append(q_target)
+
+                rho = scalars.rho**t
+                consistency_loss += rho * mse(z_next_pred, z_next).mean(dim=1)
+                reward_loss += rho * mse(reward_pred, rew[t])
+                value_loss += rho * (
+                    mse(q_pred[0], q_target) + mse(q_pred[1], q_target)
+                )
+
+                # Additional reward prediction loss.
+                reward_pred = hl_agent.model.reward(
+                    torch.cat([hl_feat[t], ac[t]], dim=-1)
+                ).squeeze(-1)
+                reward_loss += mse(reward_pred, rew[t])
+                # Additional value prediction loss.
+                obs = hl_feat[t] if not cfg.sac else ob[t]["ob"]
+                q_pred = hl_agent.model.critic(obs, ac[t])
+                value_loss += mse(q_pred[0], q_target) + mse(q_pred[1], q_target)
+
+            # If only using SAC, model loss is nothing but the critic loss.
+            if cfg.sac:
+                consistency_loss *= 0
+                reward_loss *= 0
+
+            model_loss = (
+                scalars.consistency * consistency_loss.clamp(max=1e5)
+                + scalars.hl_reward * reward_loss.clamp(max=1e5) * 0.5
+                + scalars.hl_value * value_loss.clamp(max=1e5)
+            ).mean()
+            model_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
+        model_grad_norm = self.model_optim.step(model_loss)
+
+        # Trains high-level policy.
+        with torch.autocast(cfg.device, enabled=self._use_amp):
+            actor_loss = 0
+            skill_prior_loss = torch.tensor(0.0, device=self._device)
+            alpha = self.log_alpha.exp().detach()
+            actor_prior_divs = []
+            hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
+            z = z_next_pred = hl_feat[0]
+
+            # Computes `actor_loss` based on imagined states, `skill_prior_loss` based on encoded ground-truth states.
+            for t in range(cfg.n_skill):
+                z = z_next_pred
+                a, ac_dist = hl_agent.actor.act(z, return_dist=True)
+                ac_dist_state = hl_agent.actor(hl_feat[t])
+                rho = scalars.rho**t
+                if cfg.sac:
+                    z = ob[t]["ob"]
+                actor_loss += -rho * torch.min(*hl_agent.model.critic(z, a))
+                info["actor_std"] = ac_dist.base_dist.base_dist.scale.mean().item()
+
+                # Skill prior regularization.
+                with torch.no_grad():
+                    prior_dist = self.skill_prior.actor(sp_feat[t])
+                prior_div = torch.clamp(
+                    mc_kl(ac_dist_state, prior_dist), -max_kl, max_kl
+                ).mean()
+                if cfg.use_prior:
+                    skill_prior_loss += rho * (cfg.fixed_alpha or alpha) * prior_div
+                info["actor_prior_div"] = prior_div.item()
+                actor_prior_divs.append(prior_div)
+            skill_prior_loss = (
+                (scalars.hl_prior * skill_prior_loss).clamp(-1e5, 1e5).mean()
+            )
+            if cfg.use_prior:
+                skill_prior_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
+            actor_loss = actor_loss.clamp(-1e5, 1e5).mean()
+            actor_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
+        actor_grad_norm = self.actor_optim.step(actor_loss + skill_prior_loss)
+
+        prior_divs = torch.cat(prior_divs)
+        actor_prior_divs = torch.stack(actor_prior_divs)
+        # Update alpha.
+        if cfg.fixed_alpha is None:
+            with torch.autocast(cfg.device, enabled=self._use_amp):
+                alpha = self.log_alpha.exp()
+                alpha_loss = alpha * (
+                    cfg.target_divergence - actor_prior_divs.mean().detach()
+                )
+            self.alpha_optim.step(alpha_loss)
+
+        # Update model target.
+        self._update_iter += 1
+        if self._update_iter % cfg.target_update_freq == 0:
+            soft_copy_network(
+                hl_agent.model_target, hl_agent.model, cfg.target_update_tau
+            )
+
+        # For logging.
+        q_targets = torch.cat(q_targets)
+        q_preds[0] = torch.cat(q_preds[0])
+        q_preds[1] = torch.cat(q_preds[1])
+        info["value_target_min"] = q_targets.min().item()
+        info["value_target_max"] = q_targets.max().item()
+        info["value_target"] = q_targets.mean().item()
+        info["value_predicted_min0"] = q_preds[0].min().item()
+        info["value_predicted_min1"] = q_preds[1].min().item()
+        info["value_predicted0"] = q_preds[0].mean().item()
+        info["value_predicted1"] = q_preds[1].mean().item()
+        info["value_predicted_max0"] = q_preds[0].max().item()
+        info["value_predicted_max1"] = q_preds[1].max().item()
+        if cfg.use_prior:
+            value_skill_prior = (cfg.fixed_alpha or alpha) * prior_divs
+            info["value_skill_prior"] = value_skill_prior.mean().item()
+            info["value_skill_prior_min"] = value_skill_prior.min().item()
+            info["value_skill_prior_max"] = value_skill_prior.max().item()
+        info["skill_prior_loss"] = skill_prior_loss.mean().item()
+        info["model_grad_norm"] = model_grad_norm.item()
+        info["actor_grad_norm"] = actor_grad_norm.item()
+        info["actor_loss"] = actor_loss.mean().item()
+        info["model_loss"] = model_loss.mean().item()
+        info["consistency_loss"] = consistency_loss.mean().item()
+        info["reward_loss"] = reward_loss.mean().item()
+        info["critic_loss"] = value_loss.mean().item()
+        info["alpha"] = cfg.fixed_alpha or alpha.item()
+        info["alpha_loss"] = alpha_loss.item() if cfg.fixed_alpha is None else 0
+        rewards = torch.cat(rewards)
+        info["reward_predicted"] = rewards.mean().item()
+        info["reward_predicted_min"] = rewards.min().item()
+        info["reward_predicted_max"] = rewards.max().item()
+        info["reward_gt"] = rew.mean().item()
+        info["reward_gt_max"] = rew.max().item()
+        info["reward_gt_min"] = rew.min().item()
+
+        return info.get_dict()
+
+    def pretrain(self):
+        train_info = Info()
+        sw_data, sw_train = StopWatch(), StopWatch()
+        for _ in range(self._cfg.pretrain.train_iter):
+            sw_data.start()
+            batch = self._pretrain_buffer.sample(self._cfg.pretrain.batch_size)
+            sw_data.stop()
+
+            sw_train.start()
+            _train_info = self._pretrain(batch)
+            train_info.add(_train_info)
+            sw_train.stop()
+        Logger.info(f"Data: {sw_data.average():.3f}  Train: {sw_train.average():.3f}")
+
+        info = train_info.get_dict()
+        Logger.info(
+            f"[HL] actor loss: {info['hl_actor_loss']:.3f}  model loss: {info['hl_model_loss']:.3f}  consistency loss: {info['consistency_loss']:.3f}"
+        )
+        # Logger.info(
+        #     f"[LL] actor loss: {info['ll_actor_loss']:.3f}  kl loss: {info['ll_vae_kl_loss']:.3f}"
+        # )
+        return info
+
+    def pretrain_eval(self):
+        batch = self._pretrain_val_buffer.sample(self._cfg.pretrain.batch_size)
+        return self._pretrain(batch, is_train=False)
+
+    def _pretrain(self, batch, is_train=True):
+        """Pre-trains skills, skill dynamics model, and skill prior."""
+        cfg = self._cfg
+        B, H, L = cfg.pretrain.batch_size, cfg.skill_horizon, cfg.n_skill
+        scalars = cfg.scalars
+        hl_agent = self.meta_agent
+
+
+import hydra
+from omegaconf import DictConfig
+import gym
+
+
+@hydra.main(config_path="config/algo/", config_name="seqref")
+def debug(cfg: DictConfig):
+    obs_space = gym.spaces.Box(low=-1, high=1, shape=(21,))
+    ac_space = gym.spaces.Box(low=-1, high=1, shape=(7,))
+    agent = SeqRefAgent(cfg, obs_space, ac_space)
+    agent.pretrain()
+
+
+if __name__ == "__main__":
+    debug()

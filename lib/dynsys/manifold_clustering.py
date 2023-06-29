@@ -9,7 +9,9 @@ from lib.dynsys.manifold_statistics import (
 )
 
 
-def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_max=100):
+def manifold_k_means(
+    manifold, data, nb_clusters, initial_means=None, nb_iter_max=100, logger=None
+):
     nb_data = data.shape[0]
     # If no initialization provided, initialize randomly
     if initial_means is None:
@@ -47,6 +49,22 @@ def manifold_k_means(manifold, data, nb_clusters, initial_means=None, nb_iter_ma
 
         # Update number of iterations
         nb_iter += 1
+    if nb_iter < nb_iter_max:
+        if logger is None:
+            print(
+                f"Manifold K-Means did not converge before reaching the maximum {nb_iter_max} number of iterations."
+            )
+        else:
+            logger.info(
+                f"Manifold K-Means did not converge before reaching the maximum {nb_iter_max} number of iterations."
+            )
+    else:
+        if logger is None:
+            print(f"Manifold K-Means convergeed in {nb_iter} number of iterations.")
+        else:
+            logger.info(
+                f"Manifold K-Means convergeed in {nb_iter} number of iterations."
+            )
 
     return cluster_means, cluster_assignments
 
@@ -159,11 +177,11 @@ def manifold_gmm_em(
 
     if logger is None:
         print(
-            f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
+            f"Manifold GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
         )
     else:
         logger.info(
-            f"GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
+            f"Manifold GMM did not converge before reaching the maximum {nb_iter_max} number of iterations."
         )
     return means, covariances, priors, GAMMA
 
