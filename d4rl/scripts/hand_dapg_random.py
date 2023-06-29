@@ -14,6 +14,7 @@ USAGE:\n
     $ python utils/visualize_policy --env_name relocate-v0 --policy policies/relocate-v0.pickle --mode evaluation\n
 """
 
+
 # MAIN =========================================================
 @click.command(help=DESC)
 @click.option("--env_name", type=str, help="environment to load", required=True)

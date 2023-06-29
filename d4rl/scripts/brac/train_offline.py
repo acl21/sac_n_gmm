@@ -90,7 +90,10 @@ def main(_):
         model_arch = ((200, 200),)
     elif FLAGS.model_arch == 1:
         model_arch = (
-            ((300, 300), (200, 200),),
+            (
+                (300, 300),
+                (200, 200),
+            ),
             2,
         )
     else:

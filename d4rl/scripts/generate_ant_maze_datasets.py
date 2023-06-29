@@ -126,13 +126,18 @@ def main():
         new_obs = np.concatenate([obs_new, goal_tuple], -1)
         return (
             policy.get_action(new_obs)[0],
-            (goal_tuple[0] + obs[0], goal_tuple[1] + obs[1],),
+            (
+                goal_tuple[0] + obs[0],
+                goal_tuple[1] + obs[1],
+            ),
         )
 
     data = reset_data()
 
     # create waypoint generating policy integrated with high level controller
-    data_collection_policy = env.create_navigation_policy(_goal_reaching_policy_fn,)
+    data_collection_policy = env.create_navigation_policy(
+        _goal_reaching_policy_fn,
+    )
 
     if args.video:
         frames = []

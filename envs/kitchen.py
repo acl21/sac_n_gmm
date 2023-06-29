@@ -37,7 +37,17 @@ class KitchenEnv(GymEnv):
         self.max_episode_steps = 280
 
     def _default_hparams(self):
-        return super()._default_hparams().overwrite(ParamDict({"name": self.name,}))
+        return (
+            super()
+            ._default_hparams()
+            .overwrite(
+                ParamDict(
+                    {
+                        "name": self.name,
+                    }
+                )
+            )
+        )
 
     def step(self, *args, **kwargs):
         obs, rew, done, info = super().step(*args, **kwargs)

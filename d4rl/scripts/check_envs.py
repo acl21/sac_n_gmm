@@ -76,9 +76,11 @@ if __name__ == "__main__":
         assert (
             dset["rewards"].shape[0] == N
         ), "Reward number does not match (%d vs %d)" % (dset["rewards"].shape[0], N)
-        assert dset["terminals"].shape[0] == N, (
-            "Terminals number does not match (%d vs %d)"
-            % (dset["terminals"].shape[0], N,)
+        assert (
+            dset["terminals"].shape[0] == N
+        ), "Terminals number does not match (%d vs %d)" % (
+            dset["terminals"].shape[0],
+            N,
         )
         print("\t num terminals: %d" % np.sum(dset["terminals"]))
 
@@ -103,8 +105,10 @@ if __name__ == "__main__":
         assert (
             dset["rewards"].shape[0] == N
         ), "Reward number does not match (%d vs %d)" % (dset["rewards"].shape[0], N)
-        assert dset["terminals"].shape[0] == N, (
-            "Terminals number does not match (%d vs %d)"
-            % (dset["terminals"].shape[0], N,)
+        assert (
+            dset["terminals"].shape[0] == N
+        ), "Terminals number does not match (%d vs %d)" % (
+            dset["terminals"].shape[0],
+            N,
         )
         print("\t num terminals: %d" % np.sum(dset["terminals"]))

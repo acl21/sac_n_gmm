@@ -63,7 +63,11 @@ class ACRandMaze0S40Env(MazeEnv):
         self.max_episode_steps = 2000
 
     def _default_hparams(self):
-        default_dict = ParamDict({"name": "maze2d-randMaze0S40-ac-v0",})
+        default_dict = ParamDict(
+            {
+                "name": "maze2d-randMaze0S40-ac-v0",
+            }
+        )
         return super()._default_hparams().overwrite(default_dict)
 
     def step(self, *args, **kwargs):

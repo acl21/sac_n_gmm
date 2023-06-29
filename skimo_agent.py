@@ -576,7 +576,7 @@ class SkiMoAgent(BaseAgent):
                 q_preds[1].append(q_pred[1].detach())
                 q_targets.append(q_target)
 
-                rho = scalars.rho ** t
+                rho = scalars.rho**t
                 consistency_loss += rho * mse(z_next_pred, z_next).mean(dim=1)
                 reward_loss += rho * mse(reward_pred, rew[t])
                 value_loss += rho * (
@@ -620,7 +620,7 @@ class SkiMoAgent(BaseAgent):
                 z = z_next_pred
                 a, ac_dist = hl_agent.actor.act(z, return_dist=True)
                 ac_dist_state = hl_agent.actor(hl_feat[t])
-                rho = scalars.rho ** t
+                rho = scalars.rho**t
                 if cfg.sac:
                     z = ob[t]["ob"]
                 actor_loss += -rho * torch.min(*hl_agent.model.critic(z, a))
@@ -751,7 +751,8 @@ class SkiMoAgent(BaseAgent):
             x = ac.view(B, L, -1)
             if cfg.lstm:
                 x = torch.cat(
-                    [ac.view(B, L, H, -1), ll_embed[:, :-1].view(B, L, H, -1)], dim=-1,
+                    [ac.view(B, L, H, -1), ll_embed[:, :-1].view(B, L, H, -1)],
+                    dim=-1,
                 ).view(B, L, -1)
             else:
                 x = torch.cat([x, ll_embed[:, :-1:H]], dim=-1)
@@ -808,7 +809,7 @@ class SkiMoAgent(BaseAgent):
                 a = hl_ac[t] if cfg.joint_training else hl_ac[t].detach()
                 h_next_pred, _ = hl_agent.model.imagine_step(h, a)
                 h_next_target = hl_feat_target[t + 1]
-                rho = scalars.rho ** t
+                rho = scalars.rho**t
                 consistency_loss += rho * mse(h_next_pred, h_next_target).mean(dim=1)
                 hs.append(h_next_pred)
 
@@ -910,7 +911,11 @@ class SkiMoAgent(BaseAgent):
 
         def render(ax, data, cmap, title, legend=True):
             s = ax.scatter(
-                40 - data[:, 1], data[:, 0], s=3, c=np.arange(len(data)), cmap=cmap,
+                40 - data[:, 1],
+                data[:, 0],
+                s=3,
+                c=np.arange(len(data)),
+                cmap=cmap,
             )
             ax.set_title(title)
             if legend:

@@ -46,21 +46,38 @@ def experiment(variant):
 
     M = variant["layer_size"]
     qf1 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[M, M],
     )
     qf2 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[M, M],
     )
     target_qf1 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M,],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[
+            M,
+            M,
+        ],
     )
     target_qf2 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M,],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[
+            M,
+            M,
+        ],
     )
     policy = TanhGaussianPolicy(
         obs_dim=obs_dim,
         action_dim=action_dim,
-        hidden_sizes=[M, M,],  # Making it easier to visualize
+        hidden_sizes=[
+            M,
+            M,
+        ],  # Making it easier to visualize
     )
     # behavior_policy = TanhGaussianPolicy(
     #     obs_dim=obs_dim,
@@ -82,7 +99,9 @@ def experiment(variant):
     )
 
     replay_buffer = EnvReplayBuffer(
-        variant["replay_buffer_size"], expl_env, with_per=False,
+        variant["replay_buffer_size"],
+        expl_env,
+        with_per=False,
     )
     if variant["load_buffer"]:
         load_hdf5(eval_env.unwrapped.get_dataset(), replay_buffer)

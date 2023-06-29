@@ -228,7 +228,8 @@ class SPiRLTrainer(Trainer):
                 return
 
             wandb.log(
-                {f"test_ep{name}/replay_vis": wandb.Image(fig)}, step=step,
+                {f"test_ep{name}/replay_vis": wandb.Image(fig)},
+                step=step,
             )
             plt.close(fig)
 

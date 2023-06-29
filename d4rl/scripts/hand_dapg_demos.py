@@ -14,6 +14,7 @@ USAGE:\n
     $ python utils/visualize_demos --env_name relocate-v0\n
 """
 
+
 # MAIN =========================================================
 @click.command(help=DESC)
 @click.option("--env_name", type=str, help="environment to load", default="door-v0")

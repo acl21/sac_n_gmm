@@ -67,6 +67,7 @@ for n, ep in enumerate(ep_start_end_list):
             curr_task = next_task
         print()
 
+
 # define a task by its own frequency and task transition
 class Task:
     def __init__(self, name):

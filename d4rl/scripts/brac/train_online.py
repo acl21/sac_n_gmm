@@ -61,7 +61,12 @@ def main(_):
         sub_dir = utils.get_datetime()
     else:
         sub_dir = FLAGS.sub_dir
-    log_dir = os.path.join(FLAGS.root_dir, FLAGS.env_name, FLAGS.agent_name, sub_dir,)
+    log_dir = os.path.join(
+        FLAGS.root_dir,
+        FLAGS.env_name,
+        FLAGS.agent_name,
+        sub_dir,
+    )
     utils.maybe_makedirs(log_dir)
     train_eval_online.train_eval_online(
         log_dir=log_dir,

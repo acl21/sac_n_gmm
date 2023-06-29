@@ -48,21 +48,38 @@ def experiment(variant):
 
     M = variant["layer_size"]
     qf1 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[M, M],
     )
     qf2 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[M, M],
     )
     target_qf1 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M,],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[
+            M,
+            M,
+        ],
     )
     target_qf2 = FlattenMlp(
-        input_size=obs_dim + action_dim, output_size=1, hidden_sizes=[M, M,],
+        input_size=obs_dim + action_dim,
+        output_size=1,
+        hidden_sizes=[
+            M,
+            M,
+        ],
     )
     policy = TanhGaussianPolicy(
         obs_dim=obs_dim,
         action_dim=action_dim,
-        hidden_sizes=[M, M,],  # Making it easier to visualize
+        hidden_sizes=[
+            M,
+            M,
+        ],  # Making it easier to visualize
     )
     vae_policy = VAEPolicy(
         obs_dim=obs_dim,
@@ -70,10 +87,18 @@ def experiment(variant):
         hidden_sizes=[M, M],
         latent_dim=action_dim * 2,
     )
-    eval_path_collector = CustomMDPPathCollector(eval_env,)
-    expl_path_collector = MdpPathCollector(expl_env, policy,)
+    eval_path_collector = CustomMDPPathCollector(
+        eval_env,
+    )
+    expl_path_collector = MdpPathCollector(
+        expl_env,
+        policy,
+    )
 
-    replay_buffer = EnvReplayBuffer(variant["replay_buffer_size"], expl_env,)
+    replay_buffer = EnvReplayBuffer(
+        variant["replay_buffer_size"],
+        expl_env,
+    )
     load_hdf5(eval_env.unwrapped.get_dataset(), replay_buffer)
 
     trainer = BEARTrainer(

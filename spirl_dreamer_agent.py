@@ -97,7 +97,9 @@ class DreamerPriorAgent(DreamerAgent):
         self.mse = torch.nn.MSELoss()
 
         self._log_alpha = torch.tensor(
-            np.log(cfg.alpha_init_temperature), requires_grad=True, device=self._device,
+            np.log(cfg.alpha_init_temperature),
+            requires_grad=True,
+            device=self._device,
         )
         self._alpha_optim = optim.Adam(
             [self._log_alpha], lr=cfg.alpha_lr, betas=(0.5, 0.999)
@@ -153,11 +155,11 @@ class DreamerPriorAgent(DreamerAgent):
 
     def preprocess(self, ob):
         if isinstance(ob, torch.Tensor):
-            if self._cfg.env == "maze":
-                shape = ob.shape
-                ob = ob.view(-1, shape[-1])
-                ob = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
-                ob = ob.view(shape)
+            # if self._cfg.env == "maze":
+            #     shape = ob.shape
+            #     ob = ob.view(-1, shape[-1])
+            #     ob = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
+            #     ob = ob.view(shape)
             return ob
         ob = ob.copy()
         for k, v in ob.items():
@@ -322,7 +324,6 @@ class DreamerPriorAgent(DreamerAgent):
             with torch.no_grad(), torch.autocast(
                 self._cfg.device, enabled=self._use_amp
             ):
-
                 # 5 timesteps for each of 4 samples
                 init, _ = self.model.dynamics.observe(embed[:4, :5], ac[:4, :5])
                 init = {k: v[:, -1] for k, v in init.items()}

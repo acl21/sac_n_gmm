@@ -95,7 +95,9 @@ class TDMPCPriorAgent(TDMPCAgent):
         self.mse = torch.nn.MSELoss()
 
         self._log_alpha = torch.tensor(
-            np.log(cfg.alpha_init_temperature), requires_grad=True, device=self._device,
+            np.log(cfg.alpha_init_temperature),
+            requires_grad=True,
+            device=self._device,
         )
         self._alpha_optim = optim.Adam(
             [self._log_alpha], lr=cfg.alpha_lr, betas=(0.5, 0.999)
@@ -152,11 +154,11 @@ class TDMPCPriorAgent(TDMPCAgent):
 
     def preprocess(self, ob):
         if isinstance(ob, torch.Tensor):
-            if self._cfg.env == "maze":
-                shape = ob.shape
-                ob = ob.view(-1, shape[-1])
-                ob = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
-                ob = ob.view(shape)
+            # if self._cfg.env == "maze":
+            #     shape = ob.shape
+            #     ob = ob.view(-1, shape[-1])
+            #     ob = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
+            #     ob = ob.view(shape)
             return ob
         ob = ob.copy()
         for k, v in ob.items():
@@ -275,7 +277,7 @@ class TDMPCPriorAgent(TDMPCAgent):
                     q_target = rew[t] + cfg.rl_discount * q_next
                 zs.append(z_next_pred.detach())
 
-                rho = cfg.rho ** t
+                rho = cfg.rho**t
                 consistency_loss += rho * mse(z_next_pred, z_next).mean(dim=1)
                 reward_loss += rho * mse(reward_pred, rew[t])
                 value_loss += rho * (
@@ -294,7 +296,7 @@ class TDMPCPriorAgent(TDMPCAgent):
             actor_loss = 0
             for t, z in enumerate(zs):
                 a = self.actor(z, cfg.min_std)
-                rho = cfg.rho ** t
+                rho = cfg.rho**t
                 actor_loss += (
                     -rho * torch.min(*self.model.critic(z, a)).mean()
                     + alpha * prior_div.mean()

@@ -256,9 +256,9 @@ def draw_graph(
         max_value = max(max_value, max_)
         min_value = min(min_value, min_)
 
-    if min_y == None:
+    if min_y is None:
         min_y = int(min_value - 1)
-    if max_y == None:
+    if max_y is None:
         max_y = max_value
         # max_y = int(max_value + 1)
 
@@ -657,7 +657,7 @@ def plot_ablation_maze(key=None):
 
 
 def plot_cem_kitchen():
-    plot_logs = get_data(f"Ablations-Kitchen-CEM")
+    plot_logs = get_data("Ablations-Kitchen-CEM")
     line_colors = {
         "cem": "C1",
         "no_cem": "C0",
@@ -683,14 +683,14 @@ def plot_cem_kitchen():
         num_points=100,
         num_x_tick=4,
         smoothing_weight=0.99,
-        file_name=f"cem_kitchen",
+        file_name="cem_kitchen",
         line_colors=line_colors,
         line_styles=line_styles,
     )
 
 
 def plot_cem_maze():
-    plot_logs = get_data(f"Ablations-Maze-CEM", y_scale=100)
+    plot_logs = get_data("Ablations-Maze-CEM", y_scale=100)
     line_colors = {
         "cem": "C1",
         "no_cem": "C0",
