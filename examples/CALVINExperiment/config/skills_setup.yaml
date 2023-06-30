@@ -8,16 +8,16 @@ dim: 3
 skill: null
 train: true # false to load validation dataset
 goal_centered: true # this must be false during evaluation
-dt: 0.0666
-sampling_dt: 0.0333
+dt: 0.02
+sampling_dt: 0.02
 normalized: false
 is_quaternion: false
-ignore_bad_demos: false
+ignore_bad_demos: true
 
 # Evaluation and DS params
 max_steps: 240
 
 # GMM params
-gmm_components: 6
+gmm_components: 3
 plot: true
 gmm_input_size: ${dim}

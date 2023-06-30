@@ -50,7 +50,7 @@ class CALVINDynSysDataset(Dataset):
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
         # Ignore trajectories that do not succeed in the env
-        if ignore_bad_demos:
+        if ignore_bad_demos and self.train:
             ignore_indices = []
             ignore_indices = self.get_bad_demo_indices()
             self.X = np.delete(self.X, ignore_indices, axis=0)
@@ -96,7 +96,8 @@ class CALVINDynSysDataset(Dataset):
 
         # Get first order derivative dX from X
         self.dX = np.empty((self.X.shape[0], self.X.shape[1], self.X.shape[2]))
-        self.dX[:, :-1, :] = (self.X[:, 1:, :] - self.X[:, :-1, :]) / self.dt
+        self.dX[:, :-2, :] = (self.X[:, 2:, :] - self.X[:, :-2, :]) / self.dt
+        self.dX[:, -2, :] = (self.X[:, -1, :] - self.X[:, -2, :]) / self.dt
         self.dX[:, -1, :] = np.zeros(self.dX.shape[-1])
 
         self.X = torch.from_numpy(self.X).type(torch.FloatTensor)
