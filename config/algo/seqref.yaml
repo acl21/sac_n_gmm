@@ -7,7 +7,6 @@ name: seqref
 phase: pretrain
 
 # SkiMo (Not needed?)
-n_skill: 4
 skill_horizon: 10
 skill_dim: 10
 
@@ -15,6 +14,7 @@ skill_dim: 10
 pretrain:
   skills: ["open_drawer", "turn_on_lightbulb", "move_slider_left", "turn_on_led"]
   skills_dir: "/home/lagandua/projects/skimo_base/refining-skill-sequences/skills/"
+  retrain_gmm: false
   # GMM params
   gmm_components: 3
   plot_gmm: true
@@ -27,6 +27,7 @@ pretrain:
     is_quaternion: true
     train: true
     ignore_bad_demos: true
+    dt: 0.02
   # Dynamics model
   learn_model: true
   # Default ones from skimo

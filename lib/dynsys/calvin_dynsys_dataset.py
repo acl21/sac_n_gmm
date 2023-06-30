@@ -1,13 +1,11 @@
-import glob
 import os
-import numpy as np
-from torch.utils.data import Dataset
+import glob
 import torch
-import pdb
-import pybullet as p
+import pybullet
+import numpy as np
 
 
-class CALVINDynSysDataset(Dataset):
+class CALVINDynSysDataset(object):
     def __init__(
         self,
         skill,
@@ -15,8 +13,7 @@ class CALVINDynSysDataset(Dataset):
         state_type="joint",
         demos_dir="",
         goal_centered=False,
-        dt=2 / 30,
-        sampling_dt=1 / 30,
+        dt=0.02,
         normalized=False,
         is_quaternion=False,
         ignore_bad_demos=False,
@@ -26,9 +23,9 @@ class CALVINDynSysDataset(Dataset):
         self.demos_dir = demos_dir
         self.goal_centered = goal_centered
         self.dt = dt
-        self.sampling_dt = sampling_dt
         self.normalized = normalized
         self.train = train
+        self.ignore_bad_demos = ignore_bad_demos
 
         # Check if demos and skill directory exist
         assert os.path.isdir(self.demos_dir), "Demos directory does not exist!"
@@ -47,8 +44,8 @@ class CALVINDynSysDataset(Dataset):
         start_idx, end_idx = self.get_valid_columns(self.state_type)
         self.X = np.load(self.data_file)[:, :, start_idx:end_idx]
 
-        # Ignore trajectories that do not succeed in the env
-        if ignore_bad_demos:
+        # Ignore trajectories that do not succeed in the env (only for train dataset)
+        if self.ignore_bad_demos and self.train:
             ignore_indices = []
             ignore_indices = self.get_bad_demo_indices()
             self.X = np.delete(self.X, ignore_indices, axis=0)
@@ -62,12 +59,14 @@ class CALVINDynSysDataset(Dataset):
         # Convert fixed ori from Euler to Quaternion when flagged
         # Convert Euler orientations in self.X to Quaternion when flagged
         if is_quaternion:
-            self.fixed_ori = np.array(p.getQuaternionFromEuler(self.fixed_ori))
+            self.fixed_ori = np.array(pybullet.getQuaternionFromEuler(self.fixed_ori))
             if self.state_type == "ori":
-                self.X = np.apply_along_axis(p.getQuaternionFromEuler, -1, self.X)
+                self.X = np.apply_along_axis(
+                    pybullet.getQuaternionFromEuler, -1, self.X
+                )
             elif self.state_type == "pos_ori":
                 oris = np.apply_along_axis(
-                    p.getQuaternionFromEuler, -1, self.X[:, :, 3:]
+                    pybullet.getQuaternionFromEuler, -1, self.X[:, :, 3:]
                 )
                 self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
@@ -94,17 +93,9 @@ class CALVINDynSysDataset(Dataset):
 
         # Get first order derivative dX from X
         self.dX = np.empty((self.X.shape[0], self.X.shape[1], self.X.shape[2]))
-        self.dX[:, :-1, :] = (self.X[:, 1:, :] - self.X[:, :-1, :]) / self.dt
+        self.dX[:, :-2, :] = (self.X[:, 2:, :] - self.X[:, :-2, :]) / self.dt
+        self.dX[:, -2, :] = (self.X[:, -1, :] - self.X[:, -2, :]) / self.dt
         self.dX[:, -1, :] = np.zeros(self.dX.shape[-1])
-
-        self.X = torch.from_numpy(self.X).type(torch.FloatTensor)
-        self.dX = torch.from_numpy(self.dX).type(torch.FloatTensor)
-
-    def __len__(self):
-        return len(self.X)
-
-    def __getitem__(self, idx):
-        return self.X[idx], self.dX[idx]
 
     def normalize(self, x):
         """See this link for clarity: https://stats.stackexchange.com/questions/178626/how-to-normalize-data-between-1-and-1"""

@@ -94,13 +94,15 @@ class SkillTrainer(Trainer):
                 eval_info = self._agent.pretrain_eval()
                 self._log_pretrain(step, eval_info, "_eval")
 
-                # Add environment rollout for evaluation
-                Logger.info("Creating environment rollout")
-                ep_rollouts_, ep_info = self._evaluate(step, cfg.record_video)
-                if cfg.env.id == "maze":
-                    ep_rollouts.extend(ep_rollouts_)
-                    self._log_test(step=step, ep_info={}, rollouts=ep_rollouts)
-                self._log_pretrain(step, ep_info.get_dict(), "_eval")
+                # Do not evaluate in the environment when pretraining seqref
+                if not (cfg.rolf.name == "seqref" and cfg.rolf.phase == "pretrain"):
+                    # Add environment rollout for evaluation
+                    Logger.info("Creating environment rollout")
+                    ep_rollouts_, ep_info = self._evaluate(step, cfg.record_video)
+                    if cfg.env.id == "maze":
+                        ep_rollouts.extend(ep_rollouts_)
+                        self._log_test(step=step, ep_info={}, rollouts=ep_rollouts)
+                    self._log_pretrain(step, ep_info.get_dict(), "_eval")
 
             if should_ckpt(step):
                 self._save_ckpt(step)

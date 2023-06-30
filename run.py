@@ -27,7 +27,7 @@ class SkillRLRun(Run):
         return super()._get_trainer()
 
 
-@hydra.main(config_path="config", config_name="default_config")
+@hydra.main(config_path="config", config_name="seqref_calvin")
 def main(cfg: DictConfig) -> None:
     # Make config writable
     OmegaConf.set_struct(cfg, False)

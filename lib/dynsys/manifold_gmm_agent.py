@@ -25,9 +25,9 @@ class ManifoldGMMSkillAgent:
     def train(self):
         "Train all skills one by one"
         for idx, ds in enumerate(self.skill_ds):
-            self.logger.info(f"Training Manifold GMM {idx}:{{ds.skill}}: Started")
+            self.logger.info(f"Training Manifold GMM {idx}:{ds.skill}: Started")
             ds.train(self.logger)
-            self.logger.info(f"Training Manifold GMM {idx}:{{ds.skill}}: Ended")
+            self.logger.info(f"Training Manifold GMM {idx}:{ds.skill}: Ended")
 
     def load_params(self):
         for _, ds in enumerate(self.skill_ds):

@@ -33,7 +33,7 @@ seed: 0
 is_train: true
 init_ckpt_path: null
 init_ckpt_pretrained: false
-gpu: null
+gpu: 0
 pretrain: true
 pretrain_max_step: 1e6
 

@@ -28,9 +28,6 @@ class ManifoldGMM(object):
             is_quaternion=cfg.dataset.is_quaternion,
             ignore_bad_demos=cfg.dataset.ignore_bad_demos,
         )
-        self.dataset.X = self.dataset.X.numpy()
-        self.dataset.dX = self.dataset.dX.numpy()
-
         self.state_type = cfg.dataset.input_type
         self.dim = self.dataset.X.shape[-1]
         self.manifold = self.create_manifold()
