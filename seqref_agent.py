@@ -19,80 +19,230 @@ from rolf.networks.distributions import TanhNormal, mc_kl
 from rolf.networks.dreamer import DenseDecoderTanh, ActionDecoder, Decoder
 from rolf.networks.tdmpc_model import TDMPCModel, Encoder, LSTMEncoder
 
-from lib.dynsys.manifold_gmm_agent import ManifoldGMMSkillAgent
+from lib.dynsys.gmm_actor import GMMSkillActor
+from lib.dynsys.utils.refine import (
+    get_meta_ac_space,
+    get_refine_dict,
+)
 from seqref_rollout import SeqRefRolloutRunner
 
 
-class SeqRefMetaAgent(BaseAgent):
-    """High-level agent for SeqRef."""
+class SeqRefMetaSkillAgent(BaseAgent):
+    """High-level + Low-level agent for SeqRef."""
 
     def __init__(self, cfg, ob_space, ac_space):
         super().__init__(cfg, ob_space)
         self._ob_space = ob_space
-        self._ac_space = ac_space
+        self._refine_space = ac_space["ref"]
         self._use_amp = cfg.precision == 16
         self._dtype = torch.float16 if self._use_amp else torch.float32
         self._std_decay = LinearDecay(cfg.max_std, cfg.min_std, cfg.std_step)
         self._horizon_decay = LinearDecay(1, cfg.n_skill, cfg.horizon_step)
         self._update_iter = 0
-        self._ac_dim = cfg.skill_dim
+        self._meta_ac_dim = self._refine_space.shape[0]
+        self._skill_ac_dim = 3
         self._ob_dim = gym.spaces.flatdim(ob_space)
+        self._refine = False
 
         torch.set_default_dtype(self._dtype)
-        self.model = TDMPCModel(cfg, self._ob_space, 3 * cfg.skill_dim, self._dtype)
+        self.model = TDMPCModel(
+            cfg, self._ob_space, self._skill_ac_dim * cfg.skill_dim, self._dtype
+        )
         self.model_target = TDMPCModel(
-            cfg, self._ob_space, 3 * cfg.skill_dim, self._dtype
+            cfg, self._ob_space, self._skill_ac_dim * cfg.skill_dim, self._dtype
         )
         copy_network(self.model_target, self.model)
-        self.actor = ActionDecoder(
+        self.meta_actor = ActionDecoder(
             cfg.state_dim,
-            cfg.skill_dim,
+            self._meta_ac_dim,
             [cfg.num_units] * cfg.num_layers,
             cfg.dense_act,
             cfg.log_std,
         )
+        self.skill_actor = GMMSkillActor(cfg.pretrain)
         self.decoder = Decoder(cfg.decoder, cfg.state_dim, self._ob_space)
         self.to(self._device)
 
     def state_dict(self):
         return {
-            "actor": self.actor.state_dict(),
             "model": self.model.state_dict(),
             "model_target": self.model_target.state_dict(),
-            "decoder": self.decoder.state_dict(),
         }
 
     def load_state_dict(self, ckpt):
-        self.actor.load_state_dict(ckpt["actor"])
         self.model.load_state_dict(ckpt["model"])
         self.model_target.load_state_dict(ckpt["model_target"])
-        self.decoder.load_state_dict(ckpt["decoder"])
         self.to(self._device)
 
     @property
     def ac_space(self):
-        return self._ac_space
+        return (self._seq_space, self._ref_space)
 
     @torch.no_grad()
-    def estimate_value(self, state, ac, horizon):
+    def estimate_value(self, obs, state, ac, horizon, skill_id, skill_horizon):
         """Imagine a trajectory for `horizon` steps, and estimate the value."""
         value, discount = 0, 1
         for t in range(horizon):
             state, reward = self.model.imagine_step(state, ac[t])
             value += discount * reward
             discount *= self._cfg.rl_discount
-        value += discount * torch.min(*self.model.critic(state, self.actor.act(state)))
+        next_obs = self.decoder(state)
+        refine_vector = self.meta_actor(state)
+        # TODO: Talk to Iman, need next obs to get stacked actions
+        next_ac = self.get_refined_skill_actions(
+            next_obs,
+            refine_vector,
+            torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+            skill_horizon,
+        )
+        value += discount * torch.min(*self.model.critic(state, next_ac))
         return value
 
     @torch.no_grad()
-    def plan(self, ob, prev_mean=None, is_train=True):
+    def plan(self, ob, skill_id, prev_mean=None, is_train=True):
         """Plan given an observation `ob`."""
-        pass
+        cfg = self._cfg
+        horizon = int(self._horizon_decay(self._step))
+
+        state = self.encoder(ob)
+        # Sample policy trajectories
+        obs = ob.repeat(cfg.num_policy_traj, 1)
+        z = state.repeat(cfg.num_policy_traj, 1)
+        policy_ac = []
+        for t in range(horizon):
+            policy_ac.append(
+                self.get_refined_skill_actions(
+                    obs,
+                    None,
+                    torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+                    cfg.skill_horizon,
+                )
+            )
+            z, _ = self.model.imagine_step(z, policy_ac[t])
+            obs = self.decoder(z)  # TODO: Check this with Iman
+        policy_ac = torch.stack(policy_ac, dim=0)
+        policy_rv = torch.zeros_like(policy_ac)
+
+        # CEM optimization
+        z = state.repeat(cfg.num_policy_traj + cfg.num_sample_traj, 1)
+        obs = ob.repeat(cfg.num_policy_traj + cfg.num_sample_traj, 1)
+        mean = torch.zeros(horizon, self._meta_ac_dim, device=self._device)
+        std = 2.0 * torch.ones(horizon, self._meta_ac_dim, device=self._device)
+        # if prev_mean is not None and horizon > 1 and prev_mean.shape[0] == horizon:
+        #     mean[:-1] = prev_mean[1:]
+
+        for _ in range(cfg.cem_iter):
+            sample_rv = mean.unsqueeze(1) + std.unsqueeze(1) * torch.randn(
+                horizon, cfg.num_sample_traj, self._meta_ac_dim, device=self._device
+            )
+            sample_rv = torch.clamp(sample_rv, -0.999, 0.999)
+            rv = torch.cat([sample_rv, policy_rv], dim=1)
+
+            sample_ac = self.get_refined_skill_actions(
+                obs,
+                sample_rv,
+                torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+                cfg.skill_horizon,
+            )
+            ac = torch.cat([sample_ac, policy_ac], dim=1)
+
+            imagine_return = self.estimate_value(
+                obs, z, ac, horizon, skill_id, cfg.skill_horizon
+            ).squeeze(-1)
+            _, idxs = imagine_return.sort(dim=0)
+            idxs = idxs[-cfg.num_elites :]
+            elite_value = imagine_return[idxs]
+            elite_action = rv[:, idxs]
+
+            # Weighted aggregation of elite plans.
+            score = torch.exp(cfg.cem_temperature * (elite_value - elite_value.max()))
+            score = (score / score.sum()).view(1, -1, 1)
+            new_mean = (score * elite_action).sum(dim=1)
+            new_std = torch.sqrt(
+                torch.sum(score * (elite_action - new_mean.unsqueeze(1)) ** 2, dim=1)
+            )
+
+            mean = cfg.cem_momentum * mean + (1 - cfg.cem_momentum) * new_mean
+            std = torch.clamp(new_std, self._std_decay(self._step), 2)
+
+        # Sample action for MPC.
+        score = score.squeeze().cpu().numpy()
+        rv = elite_action[0, np.random.choice(np.arange(cfg.num_elites), p=score)]
+        if is_train:
+            rv += std[0] * torch.randn_like(std[0])
+        return torch.clamp(rv, -0.999, 0.999), mean
 
     @torch.no_grad()
-    def act(self, ob, mean=None, is_train=True, warmup=False):
-        """Returns action and the actor's activation given an observation `ob`."""
-        pass
+    def meta_act(self, ob, skill_id, mean=None, is_train=True, warmup=False):
+        """
+        Returns action and the actor's activation given an observation `ob`.
+        #TODO: Make meta_act work with Batch input :(
+        """
+        ob = ob.copy()
+        for k, v in ob.items():
+            ob[k] = np.expand_dims(v, axis=0).copy()
+
+        self.model.eval()
+        self.meta_actor.eval()
+        with torch.autocast(self._cfg.device, enabled=self._use_amp):
+            ob = to_tensor(ob, self._device, self._dtype)
+            ob = self.preprocess(ob)
+            # act purely based on the policy
+            if self._cfg.phase == "pretrain" or warmup or not self._cfg.use_cem:
+                feat = self.model.encoder(ob)
+                ac = self.meta_actor(feat, deterministic=not is_train)
+                ac = ac.cpu().numpy().squeeze(0)
+            # act based on CEM planning
+            else:
+                # TODO: Do we have to make plan() batch supported? Since they
+                # always use it in rollouts
+                ac, mean = self.plan(ob, mean, skill_id, is_train)
+                ac = ac.cpu().numpy()
+            ac = gym.spaces.unflatten(self._refine_space, ac)
+        self.model.train()
+        self.meta_actor.train()
+        return ac, mean
+
+    def skill_act(self, obs, skill_id, refine_vector, is_train=False):
+        """Takes x, performs horizon steps with skill_id-th skill, returns stacked dx-es"""
+        x = obs.numpy()[:3]
+        if refine_vector is not None:
+            self.refine(refine_vector.numpy(), skill_id)
+        dx, is_goal_reached = self.skill_actor.act(x.copy(), skill_id)
+        skill_ac = np.append(
+            dx, np.append(np.zeros(3), -1)
+        )  # pos, ori, gripper_width i.e., size=7
+        return skill_ac, is_goal_reached
+
+    def refine(self, refine_vector, skill_id):
+        refine_dict = get_refine_dict(refine_vector)
+        self.skill_actor.reset_params(skill_id)  # Revert to original weights first
+        self.skill_actor.update_params(refine_dict, skill_id)  # Then refine
+
+    @torch.no_grad()
+    def get_refined_skill_actions(self, ob, refine_vector, skill_id, skill_horizon):
+        """
+        Input
+            ob: tensor (B, 21)
+            refine_vector: tensor (B, self._meta_ac_dim)
+            skill_id: (B, 1)
+            skill_horizon: int
+        Returns (B, 30) stacked actions by performing the
+        skill_id-th skill (refined by given refine_vector) for skill_horizon steps
+        """
+        stacked_ac = np.empty(ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim)
+        for i in range(ob.shape[0]):
+            x = ob[i].numpy()[: self._skill_ac_dim]
+            if refine_vector is not None:
+                self.refine(refine_vector[i].numpy(), skill_id[i])
+            for j in range(skill_horizon):
+                dx, _ = self.skill_actor.act(x.copy(), skill_id[i])
+                stacked_ac[i, j] = dx
+                x = x + self._cfg.pretrain.dataset.dt * dx
+        stacked_ac = torch.from_numpy(
+            stacked_ac.reshape(ob.shape[0], self._cfg.skill_dim * self._skill_ac_dim)
+        )
+        return stacked_ac
 
     def preprocess(self, ob, aug=None):
         ob = ob.copy()
@@ -111,82 +261,6 @@ class SeqRefMetaAgent(BaseAgent):
         return ob
 
 
-class SeqRefSkillAgent(BaseAgent):
-    """
-    Low-level agent for SeqRef.
-    - Learns GMMs for all skills
-    - Learns the skill dynamic model on task agnostic data
-    """
-
-    def __init__(self, cfg, ob_space, ac_space):
-        super().__init__(cfg, ob_space)
-        self._ob_space = ob_space
-        self._ac_space = ac_space
-        self._use_amp = cfg.precision == 16
-        self._dtype = torch.float16 if self._use_amp else torch.float32
-        self._update_iter = 0
-
-        self._ac_dim = ac_dim = gym.spaces.flatdim(self._ac_space)
-        hidden_dims = [cfg.num_units] * cfg.num_layers
-        # CALVIN Skill like class to manage DS input and output
-        self.agent = ManifoldGMMSkillAgent(cfg.pretrain)
-        self.to(self._device)
-
-    def train(self):
-        self.agent.train()
-
-    def load_pretrained_weights(self):
-        self.agent.load_params()
-
-    def state_dict(self):
-        return {
-            "actor": self.actor.state_dict(),
-            "encoder": self.encoder.state_dict(),
-            "skill_encoder": self.skill_encoder.state_dict(),
-            "ob_norm": self._ob_norm.state_dict(),
-        }
-
-    @property
-    def ac_space(self):
-        return self._ac_space
-
-    @torch.no_grad()
-    def act(self, ob, mean=None, cond=None, is_train=True):
-        """Returns action and the actor's activation given an observation `ob`."""
-        ob = ob.copy()
-        for k, v in ob.items():
-            ob[k] = np.expand_dims(v, axis=0).copy()
-
-        self.encoder.eval()
-        self.actor.eval()
-        with torch.autocast(self._cfg.device, enabled=self._use_amp):
-            ob = to_tensor(ob, self._device, self._dtype)
-            ob = self.preprocess(ob)
-            feat = self.encoder(ob)
-            if cond is not None:
-                cond = to_tensor(cond, self._device, self._dtype).unsqueeze(0)
-            ac = self.actor.act(feat, cond, deterministic=True)
-            ac = ac.cpu().numpy().squeeze(0)
-            ac = gym.spaces.unflatten(self._ac_space, ac)
-        self.encoder.train()
-        self.actor.train()
-        return ac, mean
-
-    def preprocess(self, ob, aug=None):
-        ob = ob.copy()
-        for k, v in ob.items():
-            if len(v.shape) >= 4:
-                ob[k] = ob[k] / 255.0 - 0.5
-                if aug:
-                    ob[k] = aug(ob[k])
-            elif self._cfg.env == "maze":
-                shape = ob[k].shape
-                ob[k] = ob[k].view(-1, shape[-1])
-                ob[k] = torch.cat([ob[k][:, :2] / 40 - 0.5, ob[k][:, 2:] / 10], -1)
-                ob[k] = ob[k].view(shape)
-        return ob
-
-
 class SeqRefAgent(BaseAgent):
     """SeqRef based on TD-MPC."""
 
@@ -198,15 +272,10 @@ class SeqRefAgent(BaseAgent):
         self._dtype = torch.float16 if self._use_amp else torch.float32
         self._update_iter = 0
 
-        meta_ac_space = gym.spaces.Box(-1, 1, [cfg.skill_dim])
-        self.meta_agent = SeqRefMetaAgent(cfg, ob_space, meta_ac_space)
-        self.skill_agent = SeqRefSkillAgent(cfg, ob_space, ac_space)
+        # Meta action space = Skill dim + Refine dim
+        meta_ac_space = get_meta_ac_space(cfg)
+        self.ms_agent = SeqRefMetaSkillAgent(cfg, ob_space, meta_ac_space)
         self._aug = RandomShiftsAug()
-
-        if cfg.pretrain.retrain_gmm:
-            self.skill_agent.train()
-        else:
-            self.skill_agent.load_pretrained_weights()
 
         if cfg.phase == "rl":
             self.log_alpha = torch.tensor(
@@ -237,7 +306,7 @@ class SeqRefAgent(BaseAgent):
         self.hl_buffer = ReplayBufferEpisode(
             buffer_keys, cfg.buffer_size, sampler.sample_func_one_more_ob, cfg.precision
         )
-        self.meta_agent.set_buffer(self.hl_buffer)
+        self.ms_agent.set_buffer(self.hl_buffer)
 
         # Load data for pre-training.
         buffer_keys = ["ob", "ac", "done"]
@@ -273,7 +342,7 @@ class SeqRefAgent(BaseAgent):
 
     def _build_optims(self):
         cfg = self._cfg
-        hl_agent = self.meta_agent
+        hl_agent = self.ms_agent
         adam_amp = lambda model, lr: AdamAMP(
             model, lr, cfg.weight_decay, cfg.grad_clip, self._device, self._use_amp
         )
@@ -292,8 +361,7 @@ class SeqRefAgent(BaseAgent):
             self.alpha_optim = adam_amp(self.log_alpha, cfg.alpha_lr)
 
     def set_step(self, step):
-        self.meta_agent.set_step(step)
-        self.skill_agent.set_step(step)
+        self.ms_agent.set_step(step)
         self._step = step
 
     def is_off_policy(self):
@@ -312,7 +380,7 @@ class SeqRefAgent(BaseAgent):
 
     def state_dict(self):
         ret = {
-            "meta_agent": self.meta_agent.state_dict(),
+            "ms_agent": self.ms_agent.state_dict(),
             "ob_norm": self._ob_norm.state_dict(),
         }
 
@@ -327,7 +395,7 @@ class SeqRefAgent(BaseAgent):
         return ret
 
     def load_state_dict(self, ckpt):
-        self.meta_agent.load_state_dict(ckpt["meta_agent"])
+        self.ms_agent.load_state_dict(ckpt["ms_agent"])
 
         self.hl_model_optim.load_state_dict(ckpt["hl_model_optim"])
         self.hl_actor_optim.load_state_dict(ckpt["hl_actor_optim"])
@@ -381,7 +449,205 @@ class SeqRefAgent(BaseAgent):
 
         return train_info.get_dict()
 
+    def _update_network(self, batch):
+        """Updates skill dynamics model and high-level policy."""
+        cfg = self._cfg
+        info = Info()
+        mse = nn.MSELoss(reduction="none")
+        scalars = cfg.scalars
+        hl_agent = self.ms_agent
+        max_kl = cfg.max_divergence
+
+        if cfg.freeze_model:
+            hl_agent.model.encoder.requires_grad_(False)
+            hl_agent.model.dynamics.requires_grad_(False)
+
+        # ob: {k: BxTx`ob_dim[k]`}, ac: BxTx`ac_dim` (this is refine vector), rew: BxTx1, skill_id: BxTx1
+        o, ac, rew = batch["ob"], batch["ac"], batch["rew"]
+        done = batch["done"]
+        skill_id = batch["skill_id"]
+        o = self.preprocess(o, aug=self._aug)
+
+        # Get refined stacked actions BxT
+        ac = self.ms_agent.get_refined_skill_actions(
+            o[:, 0, :].squeeze(1), ac.squeeze(1), skill_id, cfg.skill_horizon
+        )
+        ac = ac.unsqueeze(1)
+
+        # Flip dimensions, BxT -> TxB
+        def flip(x, l=None):
+            if isinstance(x, dict):
+                return [{k: v[:, t] for k, v in x.items()} for t in range(l)]
+            else:
+                return x.transpose(0, 1)
+
+        hl_feat = flip(hl_agent.model.encoder(o))
+        # Avoid gradients for the model target
+        with torch.no_grad():
+            hl_feat_target = flip(hl_agent.model_target.encoder(o))
+
+        ob = flip(o, cfg.n_skill + 1)
+        ac = flip(ac)
+        rew = flip(rew)
+        done = flip(done)
+
+        with torch.autocast(cfg.device, enabled=self._use_amp):
+            # Trians skill dynamics model.
+            z = z_next_pred = hl_feat[0]
+            rewards = []
+
+            consistency_loss = 0
+            reward_loss = 0
+            value_loss = 0
+            prior_divs = []
+            q_preds = [[], []]
+            q_targets = []
+            alpha = self.log_alpha.exp().detach()
+            for t in range(cfg.n_skill):
+                z = z_next_pred
+                z_next_pred, reward_pred = hl_agent.model.imagine_step(z, ac[t])
+                if cfg.sac:
+                    z = ob[t]["ob"]
+                q_pred = hl_agent.model.critic(z, ac[t])
+
+                with torch.no_grad():
+                    # `z` for contrastive learning
+                    z_next = hl_feat_target[t + 1]
+
+                    # `z` for `q_target`
+                    z_next_q = hl_feat[t + 1]
+                    # TODO: Talk to Iman. This is not possible since
+                    # we need obs_next for meta action of next state
+                    # And what should be the skill_id
+                    rv_next_dist = hl_agent.meta_actor(z_next_q)
+                    rv_next = rv_next_dist.rsample()
+                    obs_next = ob[t + 1]["ob"]
+                    ac_next = hl_agent.get_refined_skill_actions(
+                        obs_next, rv_next, skill_id, cfg.skill_horizon
+                    )
+                    ac_next = ac_next.unsqueeze(1)
+                    if cfg.sac:  # This will be false
+                        z_next_q = ob[t + 1]["ob"]
+                    q_next = torch.min(*hl_agent.model_target.critic(z_next_q, ac_next))
+
+                    q_target = rew[t] + (1 - done[t].long()) * cfg.rl_discount * q_next
+                rewards.append(reward_pred.detach())
+                q_preds[0].append(q_pred[0].detach())
+                q_preds[1].append(q_pred[1].detach())
+                q_targets.append(q_target)
+
+                rho = scalars.rho**t
+                consistency_loss += rho * mse(z_next_pred, z_next).mean(dim=1)
+                reward_loss += rho * mse(reward_pred, rew[t])
+                value_loss += rho * (
+                    mse(q_pred[0], q_target) + mse(q_pred[1], q_target)
+                )
+
+                # Additional reward prediction loss.
+                reward_pred = hl_agent.model.reward(
+                    torch.cat([hl_feat[t], ac[t]], dim=-1)
+                ).squeeze(-1)
+                reward_loss += mse(reward_pred, rew[t])
+                # Additional value prediction loss.
+                obs = hl_feat[t] if not cfg.sac else ob[t]["ob"]
+                q_pred = hl_agent.model.critic(obs, ac[t])
+                value_loss += mse(q_pred[0], q_target) + mse(q_pred[1], q_target)
+
+            # If only using SAC, model loss is nothing but the critic loss.
+            if cfg.sac:
+                consistency_loss *= 0
+                reward_loss *= 0
+
+            model_loss = (
+                scalars.consistency * consistency_loss.clamp(max=1e5)
+                + scalars.hl_reward * reward_loss.clamp(max=1e5) * 0.5
+                + scalars.hl_value * value_loss.clamp(max=1e5)
+            ).mean()
+            model_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
+        model_grad_norm = self.model_optim.step(model_loss)
+
+        # Trains high-level policy.
+        with torch.autocast(cfg.device, enabled=self._use_amp):
+            actor_loss = 0
+            skill_prior_loss = torch.tensor(0.0, device=self._device)
+            alpha = self.log_alpha.exp().detach()
+            actor_prior_divs = []
+            hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
+            z = z_next_pred = hl_feat[0]
+
+            # Computes `actor_loss` based on imagined states
+            for t in range(cfg.n_skill):
+                z = z_next_pred
+                rv, rv_dist = hl_agent.meta_actor.act(z, return_dist=True)
+                rho = scalars.rho**t
+                if cfg.sac:
+                    z = ob[t]["ob"]
+                # TODO: Confirm this again
+                o = ob[t]["ob"]
+                a = hl_agent.get_refined_skill_actions(
+                    o, rv, skill_id, cfg.skill_horizon
+                )
+                actor_loss += -rho * torch.min(*hl_agent.model.critic(z, a))
+                info["actor_std"] = rv_dist.base_dist.base_dist.scale.mean().item()
+
+            actor_loss = actor_loss.clamp(-1e5, 1e5).mean()
+            actor_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
+        actor_grad_norm = self.actor_optim.step(actor_loss + skill_prior_loss)
+
+        prior_divs = torch.cat(prior_divs)
+        actor_prior_divs = torch.stack(actor_prior_divs)
+        # Update alpha.
+        if cfg.fixed_alpha is None:
+            with torch.autocast(cfg.device, enabled=self._use_amp):
+                alpha = self.log_alpha.exp()
+                alpha_loss = alpha * (
+                    cfg.target_divergence - actor_prior_divs.mean().detach()
+                )
+            self.alpha_optim.step(alpha_loss)
+
+        # Update model target.
+        self._update_iter += 1
+        if self._update_iter % cfg.target_update_freq == 0:
+            soft_copy_network(
+                hl_agent.model_target, hl_agent.model, cfg.target_update_tau
+            )
+
+        # For logging.
+        q_targets = torch.cat(q_targets)
+        q_preds[0] = torch.cat(q_preds[0])
+        q_preds[1] = torch.cat(q_preds[1])
+        info["value_target_min"] = q_targets.min().item()
+        info["value_target_max"] = q_targets.max().item()
+        info["value_target"] = q_targets.mean().item()
+        info["value_predicted_min0"] = q_preds[0].min().item()
+        info["value_predicted_min1"] = q_preds[1].min().item()
+        info["value_predicted0"] = q_preds[0].mean().item()
+        info["value_predicted1"] = q_preds[1].mean().item()
+        info["value_predicted_max0"] = q_preds[0].max().item()
+        info["value_predicted_max1"] = q_preds[1].max().item()
+        info["model_grad_norm"] = model_grad_norm.item()
+        info["actor_grad_norm"] = actor_grad_norm.item()
+        info["actor_loss"] = actor_loss.mean().item()
+        info["model_loss"] = model_loss.mean().item()
+        info["consistency_loss"] = consistency_loss.mean().item()
+        info["reward_loss"] = reward_loss.mean().item()
+        info["critic_loss"] = value_loss.mean().item()
+        info["alpha"] = cfg.fixed_alpha or alpha.item()
+        info["alpha_loss"] = alpha_loss.item() if cfg.fixed_alpha is None else 0
+        rewards = torch.cat(rewards)
+        info["reward_predicted"] = rewards.mean().item()
+        info["reward_predicted_min"] = rewards.min().item()
+        info["reward_predicted_max"] = rewards.max().item()
+        info["reward_gt"] = rew.mean().item()
+        info["reward_gt_max"] = rew.max().item()
+        info["reward_gt_min"] = rew.min().item()
+
+        return info.get_dict()
+
     def pretrain(self):
+        # Pretrain GMM Skills (Load previously trained weights if flagged)
+        self.ms_agent.skill_actor.train(retrain=self._cfg.pretrain.retrain_gmm)
+        # Pretrain Skill Dynamics Model
         train_info = Info()
         sw_data, sw_train = StopWatch(), StopWatch()
         for _ in range(self._cfg.pretrain.train_iter):
@@ -406,11 +672,16 @@ class SeqRefAgent(BaseAgent):
         return self._pretrain(batch, is_train=False)
 
     def _pretrain(self, batch, is_train=True):
-        """Pre-trains skills, skill dynamics model, and skill prior."""
+        """Pre-trains skill dynamics model.
+
+        Skill Dynamics:
+            Input - State i.e., Robot Obs + Scene Obs, Action i.e., sequentially stacked velocities (needed to go from State to Next State)
+            Output - Next State i.e., Robot Obs + Scene Obs
+        """
         cfg = self._cfg
         B, H, L = cfg.pretrain.batch_size, cfg.skill_horizon, cfg.n_skill
         scalars = cfg.scalars
-        hl_agent = self.meta_agent
+        hl_agent = self.ms_agent
         info = Info()
         mse = nn.MSELoss(reduction="none")
 
@@ -422,7 +693,7 @@ class SeqRefAgent(BaseAgent):
             ac = ac[:, :-1, :3]  # only position
 
         with torch.autocast(self._cfg.device, enabled=self._use_amp):
-            # Trains skill dynamics model and skill prior.
+            # Trains skill dynamics model.
 
             def flip(x, l=None):
                 """Flip dimensions, BxT -> TxB."""
@@ -465,9 +736,6 @@ class SeqRefAgent(BaseAgent):
             )
             hl_model_loss.register_hook(lambda grad: grad * (1 / L))
 
-            hl_loss = hl_model_loss
-
-        info["hl_loss"] = hl_loss.item()
         info["hl_model_loss"] = hl_model_loss.item()
         info["consistency_loss"] = consistency_loss.mean().item()
         info["hl_recon_loss"] = hl_recon_loss.item()

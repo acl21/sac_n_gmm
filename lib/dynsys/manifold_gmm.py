@@ -8,6 +8,7 @@ from lib.dynsys.manifold_clustering import (
 )
 from lib.dynsys.manifold_gmr import manifold_gmr
 from lib.dynsys.utils.plot_utils import visualize_3d_gmm
+from lib.dynsys.utils.posdef import isPD, nearestPD
 from lib.dynsys.calvin_dynsys_dataset import CALVINDynSysDataset
 
 
@@ -104,6 +105,54 @@ class ManifoldGMM(object):
         )
         logger.info(f"Saved Manifold GMM params of {self.skill} at {weights_file}")
 
+    def update_params(self, delta):
+        """Updates GMM parameters by given delta changes (i.e. SAC's output)
+
+        Args:
+            delta (dict): Changes given by the SAC agent to be made to the GMM parameters
+
+        Returns:
+            None
+        """
+        # Priors
+        if "priors" in delta:
+            delta_priors = delta["priors"].reshape(self.priors.shape)
+            self.priors += delta_priors
+            self.priors[self.priors < 0] = 0
+            self.priors /= self.priors.sum()
+
+        # Means
+        if "means" in delta:
+            delta_means = delta["means"].reshape(self.means.shape)
+            self.means += delta_means
+
+        # Covariances
+        if "covariances" in delta:
+            d_cov = delta["covariances"]
+            dim = self.means.shape[2] // 2
+            num_gaussians = self.means.shape[0]
+
+            # Create sigma_state symmetric matrix
+            half_mat_size = int(dim * (dim + 1) / 2)
+            for i in range(num_gaussians):
+                d_cov_state = d_cov[half_mat_size * i : half_mat_size * (i + 1)]
+                mat_d_cov_state = np.zeros((dim, dim))
+                mat_d_cov_state[np.triu_indices(dim)] = d_cov_state
+                mat_d_cov_state = mat_d_cov_state + mat_d_cov_state.T
+                mat_d_cov_state[np.diag_indices(dim)] = (
+                    mat_d_cov_state[np.diag_indices(dim)] / 2
+                )
+                self.covariances[:dim, :dim, i] += mat_d_cov_state
+                if not isPD(self.covariances[:dim, :dim, i]):
+                    self.covariances[:dim, :dim, i] = nearestPD(
+                        self.covariances[:dim, :dim, i]
+                    )
+
+            # Create sigma cross correlation matrix
+            d_cov_cc = np.array(d_cov[half_mat_size * num_gaussians :])
+            d_cov_cc = d_cov_cc.reshape((dim, dim, num_gaussians))
+            self.covariances[dim : 2 * dim, 0:dim] += d_cov_cc
+
     def train(self, logger):
         # Data
         data = self.prepare_training_data()
@@ -114,6 +163,7 @@ class ManifoldGMM(object):
             self.manifold, np.copy(data), nb_clusters=self.n_comp, logger=logger
         )
         logger.info("Manifold K-Means: Ended")
+
         # GMM
         logger.info("Manifold GMM with K-Means priors: Started")
         init_covariances = np.concatenate(
@@ -170,7 +220,9 @@ class ManifoldGMM(object):
             self.covariances,
             self.priors,
         )
-        return dx
+        new_x = x + self.dataset.dt * dx[0]
+        dist_to_goal = np.round(np.linalg.norm(new_x - self.goal), 3)
+        return dx[0], dist_to_goal <= 0.01
 
     def get_reshaped_means(self):
         """Reshape means from (n_comp, 2) to (n_comp, 2, state_size)"""

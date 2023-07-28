@@ -24,8 +24,7 @@ class SeqRefRolloutRunner(RolloutRunner):
         self._env = env
         self._env_eval = env_eval
         self._agent = agent
-        self._meta_agent = agent.meta_agent
-        self._skill_agent = agent.skill_agent
+        self._ms_agent = agent.ms_agent
         self._exclude_rollout_log = ["episode_success_state"]
 
     def run(
@@ -48,20 +47,31 @@ class SeqRefRolloutRunner(RolloutRunner):
 
         cfg = self._cfg
         env = self._env
-        meta_agent = self._meta_agent
-        skill_agent = self._skill_agent
+        ms_agent = self._ms_agent
 
         done_rollout = (
             Every(every_steps, step) if every_steps else Every(every_episodes, 0)
         )
 
         # Initialize rollout buffer.
-        meta_rollout = Rollout(["ob", "ac", "rew", "done"], cfg.rolf.precision)
-        rollout = Rollout(["ob", "meta_ac", "ac", "rew", "done"], cfg.rolf.precision)
+        meta_rollout = Rollout(
+            ["ob", "ac", "rew", "done", "skill_id"], cfg.rolf.precision
+        )
+        rollout = Rollout(
+            ["ob", "meta_ac", "ac", "rew", "done", "skill_id"], cfg.rolf.precision
+        )
         reward_info = Info()
         ep_info = Info()
         episode = 0
         rollout_len = 0
+        skill_ids = np.concatenate(
+            [
+                np.repeat(x, env.max_episode_steps / len(env.target_tasks))
+                for x in range(len(env.target_tasks))
+            ]
+        )
+        skill_id = 0
+        is_goal_reached = False
 
         while True:
             done = False
@@ -81,26 +91,34 @@ class SeqRefRolloutRunner(RolloutRunner):
 
                 # Sample meta (high-level) action from meta policy.
                 if step < cfg.rolf.warm_up_step:
-                    meta_ac, state_next_hl = meta_agent.act(
-                        ob_next, state_hl, is_train=True, warmup=True
+                    meta_ac, state_next_hl = ms_agent.meta_act(
+                        ob_next, skill_id, state_hl, is_train=True, warmup=True
                     )
                 else:
-                    meta_ac, state_next_hl = meta_agent.act(
-                        ob_next, state_hl, is_train=True
+                    meta_ac, state_next_hl = ms_agent.meta_act(
+                        ob_next, skill_id, state_hl, is_train=True
                     )
+                # Add skill_id now as it may be updated later
+                meta_rollout.add(dict(skill_id=skill_id))
 
                 # Update skill parameters with meta actions (refine GMM here)
+                ms_agent.refine(meta_ac, skill_id)
 
                 # Execute a skill.
                 skill_len = 0
                 meta_rew = 0
                 while not done and skill_len < cfg.rolf.skill_horizon:
+                    # Break if goal state of the skill_id-th skill is reached
+                    if is_goal_reached:
+                        skill_id += 1  # TODO: Talk to Iman about this
+                        skill_len = cfg.rolf.skill_horizon
+                        break
+
                     ob = ob_next
-                    state_ll = state_next_ll
 
                     # Sample low-level action from skill policy.
-                    ac, state_next_ll = skill_agent.act(
-                        ob, state_ll, cond=meta_ac, is_train=False
+                    ac, is_goal_reached = ms_agent.skill_act(
+                        ob, skill_id, meta_ac, is_train=False
                     )
 
                     # Take a step.
@@ -118,6 +136,7 @@ class SeqRefRolloutRunner(RolloutRunner):
                     rollout.add(dict(ob=ob_next, ac=flat_ac, done=done))
                     rollout.add(dict(meta_ac=meta_ac))
                     rollout.add(dict(rew=reward * cfg.rolf.reward_scale))
+                    rollout.add(dict(skill_id=skill_id))
                     reward_info.add(info)
                     rollout_len += 1
 
@@ -163,11 +182,12 @@ class SeqRefRolloutRunner(RolloutRunner):
         """
         cfg = self._cfg
         env = self._env_eval
-        meta_agent = self._meta_agent
-        skill_agent = self._skill_agent
+        ms_agent = self._ms_agent
 
         # Initialize rollout buffer.
-        rollout = Rollout(["ob", "meta_ac", "ac", "rew", "done"], cfg.rolf.precision)
+        rollout = Rollout(
+            ["ob", "meta_ac", "ac", "rew", "done", "skill_id"], cfg.rolf.precision
+        )
         reward_info = Info()
 
         done = False
@@ -177,6 +197,12 @@ class SeqRefRolloutRunner(RolloutRunner):
         ob = ob_next
         state_next_hl = None
         state_next_ll = None
+        skill_ids = np.concatenate(
+            [
+                np.repeat(x, env.max_episode_steps / len(env.target_tasks))
+                for x in range(len(env.target_tasks))
+            ]
+        )
 
         record_frames = []
         if record_video:
@@ -184,10 +210,13 @@ class SeqRefRolloutRunner(RolloutRunner):
 
         # Rollout one episode.
         while not done:
+            skill_id = skill_ids[ep_len]
             state_hl = state_next_hl
 
             # Sample meta action from meta policy.
-            meta_ac, state_next_hl = meta_agent.act(ob_next, state_hl, is_train=False)
+            meta_ac, state_next_hl = ms_agent.meta_act(
+                ob_next, state_hl, is_train=False
+            )
 
             skill_len = 0
             while not done and skill_len < cfg.rolf.skill_horizon:
@@ -195,8 +224,8 @@ class SeqRefRolloutRunner(RolloutRunner):
                 state_ll = state_next_ll
 
                 # Sample low-level action from skill policy.
-                ac, state_next_ll = skill_agent.act(
-                    ob, state_ll, cond=meta_ac, is_train=False
+                ac, state_next_ll = ms_agent.skill_act(
+                    ob, skill_id, meta_ac, is_train=False
                 )
 
                 # Take a step.
@@ -211,6 +240,7 @@ class SeqRefRolloutRunner(RolloutRunner):
                 flat_ac = gym.spaces.flatten(env.action_space, ac)
                 rollout.add(dict(ob=ob_next, ac=flat_ac, done=done))
                 rollout.add(dict(meta_ac=meta_ac, rew=reward * cfg.rolf.reward_scale))
+                rollout.add(dict(skill_id=skill_id))
                 reward_info.add(info)
 
                 if record_video:

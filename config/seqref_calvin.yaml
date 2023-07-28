@@ -26,6 +26,10 @@ rolf:
   batch_size: 256
   scalars:
     ll_actor: 2
+  refine: 
+    do: true
+    mean_shift: true
+    adapt_cov: false
 
 # Training
 deterministic: false
