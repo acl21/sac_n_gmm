@@ -28,7 +28,7 @@ rolf:
     ll_actor: 2
   refine: 
     do: true
-    mean_shift: true
+    mean_shift: false
     adapt_cov: false
 
 # Training

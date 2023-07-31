@@ -40,21 +40,21 @@ def get_meta_ac_space(cfg):
     - GMM change to refine gmms
     """
     # action_space = {"seq": gym.spaces.Discrete(cfg.skill_dim)}
-    action_space = {}
-    if cfg.rolf.refine.do:
+    action_space = None
+    if cfg.refine.do:
         ref_param_space = get_ref_param_space(cfg)
         means_high = np.ones(ref_param_space["means"].shape[0])
-        if cfg.rolf.refine.mean_shift:
+        if cfg.refine.mean_shift:
             ref_action_high = means_high
         else:
             priors_high = np.ones(ref_param_space["priors"].shape[0])
             ref_action_high = np.concatenate((priors_high, means_high), axis=-1)
-            if cfg.rolf.refine.adapt_cov:
+            if cfg.refine.adapt_cov:
                 cov_high = np.ones(ref_param_space["covariances"].shape[0])
                 ref_action_high = np.concatenate((ref_action_high, cov_high), axis=-1)
 
         ref_action_low = -ref_action_high
-        action_space["ref"] = gym.spaces.Box(ref_action_low, ref_action_high)
+        action_space = gym.spaces.Box(ref_action_low, ref_action_high)
     return action_space
 
 
@@ -64,11 +64,11 @@ def get_refine_dict(cfg, gmm_change):
     size_means = ref_param_space["means"].shape[0]
     dim = 3
     empty_means = np.empty(shape=(cfg.pretrain.gmm_components, 2, dim))
-    if cfg.rolf.refine.mean_shift:
+    if cfg.refine.mean_shift:
         # TODO: check low and high here
         means = np.hstack(
             [gmm_change.reshape((size_means, 1)) * ref_param_space["means"].high]
-            * empty_means.shape[1]
+            # * empty_means.shape[1] TODO: Check this, removing this gives the right shape
         )
 
         refine_dict = {"means": means}
@@ -78,13 +78,13 @@ def get_refine_dict(cfg, gmm_change):
         priors = gmm_change[:size_priors] * ref_param_space["priors"].high
         means = (
             gmm_change[size_priors : size_priors + size_means]
-            * ref_param_space["mu"].high
+            * ref_param_space["means"].high
         )
 
         refine_dict = {"means": means, "priors": priors}
-        if cfg.rolf.refine.adapt_cov:
+        if cfg.refine.adapt_cov:
             refine_dict["covariances"] = (
                 gmm_change[size_priors + size_means :]
                 * ref_param_space["covariances"].high
             )
-        return refine_dict
+    return refine_dict

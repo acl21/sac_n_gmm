@@ -80,13 +80,14 @@ class SeqRefRolloutRunner(RolloutRunner):
             ob_next = env.reset()
             ob = ob_next
             state_next_hl = None
-            state_next_ll = None
+            skill_id = 0
+            is_goal_reached = False
 
             rollout.add(dict(ob=ob_next))
             meta_rollout.add(dict(ob=ob_next))
 
             # Rollout one episode.
-            while not done:
+            while not done and skill_id < 4:
                 state_hl = state_next_hl
 
                 # Sample meta (high-level) action from meta policy.
@@ -118,7 +119,7 @@ class SeqRefRolloutRunner(RolloutRunner):
 
                     # Sample low-level action from skill policy.
                     ac, is_goal_reached = ms_agent.skill_act(
-                        ob, skill_id, meta_ac, is_train=False
+                        ob["ob"], None, skill_id, is_train=False
                     )
 
                     # Take a step.
@@ -196,21 +197,21 @@ class SeqRefRolloutRunner(RolloutRunner):
         ob_next = env.reset()
         ob = ob_next
         state_next_hl = None
-        state_next_ll = None
         skill_ids = np.concatenate(
             [
                 np.repeat(x, env.max_episode_steps / len(env.target_tasks))
                 for x in range(len(env.target_tasks))
             ]
         )
+        skill_id = 0
+        is_goal_reached = False
 
         record_frames = []
         if record_video:
             record_frames.append(self._render_frame(ep_len, ep_rew))
 
         # Rollout one episode.
-        while not done:
-            skill_id = skill_ids[ep_len]
+        while not done and skill_id < 4:
             state_hl = state_next_hl
 
             # Sample meta action from meta policy.
@@ -218,14 +219,22 @@ class SeqRefRolloutRunner(RolloutRunner):
                 ob_next, state_hl, is_train=False
             )
 
+            # Update skill parameters with meta actions (refine GMM here)
+            ms_agent.refine(meta_ac, skill_id)
+
             skill_len = 0
             while not done and skill_len < cfg.rolf.skill_horizon:
+                # Break if goal state of the skill_id-th skill is reached
+                if is_goal_reached:
+                    skill_id += 1  # TODO: Talk to Iman about this
+                    skill_len = cfg.rolf.skill_horizon
+                    break
+
                 ob = ob_next
-                state_ll = state_next_ll
 
                 # Sample low-level action from skill policy.
-                ac, state_next_ll = ms_agent.skill_act(
-                    ob, skill_id, meta_ac, is_train=False
+                ac, is_goal_reached = ms_agent.skill_act(
+                    ob["ob"], None, skill_id, is_train=False
                 )
 
                 # Take a step.

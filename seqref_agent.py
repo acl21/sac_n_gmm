@@ -30,16 +30,17 @@ from seqref_rollout import SeqRefRolloutRunner
 class SeqRefMetaSkillAgent(BaseAgent):
     """High-level + Low-level agent for SeqRef."""
 
-    def __init__(self, cfg, ob_space, ac_space):
+    def __init__(self, cfg, ob_space, meta_ac_space, skill_ac_space):
         super().__init__(cfg, ob_space)
         self._ob_space = ob_space
-        self._refine_space = ac_space["ref"]
+        self._meta_ac_space = meta_ac_space
+        self._skill_ac_space = skill_ac_space
         self._use_amp = cfg.precision == 16
         self._dtype = torch.float16 if self._use_amp else torch.float32
         self._std_decay = LinearDecay(cfg.max_std, cfg.min_std, cfg.std_step)
         self._horizon_decay = LinearDecay(1, cfg.n_skill, cfg.horizon_step)
         self._update_iter = 0
-        self._meta_ac_dim = self._refine_space.shape[0]
+        self._meta_ac_dim = self._meta_ac_space.shape[0]
         self._skill_ac_dim = 3
         self._ob_dim = gym.spaces.flatdim(ob_space)
         self._refine = False
@@ -86,13 +87,14 @@ class SeqRefMetaSkillAgent(BaseAgent):
             state, reward = self.model.imagine_step(state, ac[t])
             value += discount * reward
             discount *= self._cfg.rl_discount
-        next_obs = self.decoder(state)
-        refine_vector = self.meta_actor(state)
-        # TODO: Talk to Iman, need next obs to get stacked actions
+        next_obs = self.decoder(state).sample()["ob"]
+        refine_vector = self.meta_actor.act(state)
+        # TODO: Talk to Iman, need next_obs to get stacked actions
+        # Bad next_obs leads to bad GMR predictions
         next_ac = self.get_refined_skill_actions(
             next_obs,
             refine_vector,
-            torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+            torch.tensor(skill_id).repeat((next_obs.shape[0], 1)),
             skill_horizon,
         )
         value += discount * torch.min(*self.model.critic(state, next_ac))
@@ -104,32 +106,34 @@ class SeqRefMetaSkillAgent(BaseAgent):
         cfg = self._cfg
         horizon = int(self._horizon_decay(self._step))
 
-        state = self.encoder(ob)
+        state = self.model.encoder(ob)
         # Sample policy trajectories
-        obs = ob.repeat(cfg.num_policy_traj, 1)
+        obs = ob["ob"].repeat(cfg.num_policy_traj, 1)
         z = state.repeat(cfg.num_policy_traj, 1)
         policy_ac = []
+        policy_rv = []
         for t in range(horizon):
-            policy_ac.append(
-                self.get_refined_skill_actions(
-                    obs,
-                    None,
-                    torch.tensor(skill_id).repeat((obs.shape[0], 1)),
-                    cfg.skill_horizon,
-                )
+            rv = self.meta_actor.act(z)
+            ac = self.get_refined_skill_actions(
+                obs,
+                rv,
+                torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+                cfg.skill_horizon,
             )
+            policy_ac.append(ac)
+            policy_rv.append(rv)
             z, _ = self.model.imagine_step(z, policy_ac[t])
             obs = self.decoder(z)  # TODO: Check this with Iman
         policy_ac = torch.stack(policy_ac, dim=0)
-        policy_rv = torch.zeros_like(policy_ac)
+        policy_rv = torch.stack(policy_rv, dim=0)
 
         # CEM optimization
         z = state.repeat(cfg.num_policy_traj + cfg.num_sample_traj, 1)
-        obs = ob.repeat(cfg.num_policy_traj + cfg.num_sample_traj, 1)
+        obs = ob["ob"].repeat(cfg.num_policy_traj + cfg.num_sample_traj, 1)
         mean = torch.zeros(horizon, self._meta_ac_dim, device=self._device)
         std = 2.0 * torch.ones(horizon, self._meta_ac_dim, device=self._device)
-        # if prev_mean is not None and horizon > 1 and prev_mean.shape[0] == horizon:
-        #     mean[:-1] = prev_mean[1:]
+        if prev_mean is not None and horizon > 1 and prev_mean.shape[0] == horizon:
+            mean[:-1] = prev_mean[1:]
 
         for _ in range(cfg.cem_iter):
             sample_rv = mean.unsqueeze(1) + std.unsqueeze(1) * torch.randn(
@@ -139,11 +143,11 @@ class SeqRefMetaSkillAgent(BaseAgent):
             rv = torch.cat([sample_rv, policy_rv], dim=1)
 
             sample_ac = self.get_refined_skill_actions(
-                obs,
-                sample_rv,
-                torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+                obs[: cfg.num_sample_traj],
+                sample_rv.squeeze(0),
+                torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)),
                 cfg.skill_horizon,
-            )
+            ).unsqueeze(0)
             ac = torch.cat([sample_ac, policy_ac], dim=1)
 
             imagine_return = self.estimate_value(
@@ -190,34 +194,36 @@ class SeqRefMetaSkillAgent(BaseAgent):
             # act purely based on the policy
             if self._cfg.phase == "pretrain" or warmup or not self._cfg.use_cem:
                 feat = self.model.encoder(ob)
-                ac = self.meta_actor(feat, deterministic=not is_train)
+                ac = self.meta_actor.act(feat, deterministic=not is_train)
                 ac = ac.cpu().numpy().squeeze(0)
             # act based on CEM planning
             else:
                 # TODO: Do we have to make plan() batch supported? Since they
                 # always use it in rollouts
-                ac, mean = self.plan(ob, mean, skill_id, is_train)
+                ac, mean = self.plan(ob, skill_id, mean, is_train)
                 ac = ac.cpu().numpy()
-            ac = gym.spaces.unflatten(self._refine_space, ac)
+            ac = gym.spaces.unflatten(self._meta_ac_space, ac)
         self.model.train()
         self.meta_actor.train()
         return ac, mean
 
-    def skill_act(self, obs, skill_id, refine_vector, is_train=False):
+    def skill_act(self, obs, refine_vector, skill_id, is_train=False):
         """Takes x, performs horizon steps with skill_id-th skill, returns stacked dx-es"""
-        x = obs.numpy()[:3]
+        x = obs[:3]
         if refine_vector is not None:
-            self.refine(refine_vector.numpy(), skill_id)
+            self.refine(refine_vector.cpu().numpy(), skill_id)
         dx, is_goal_reached = self.skill_actor.act(x.copy(), skill_id)
-        skill_ac = np.append(
-            dx, np.append(np.zeros(3), -1)
+        # Relative difference between current ori and fixed_ori of the skill
+        dx_ori = self.skill_actor.skill_ds[skill_id].fixed_ori - obs[3:6]
+        ac = np.append(
+            dx, np.append(dx_ori, -1)
         )  # pos, ori, gripper_width i.e., size=7
-        return skill_ac, is_goal_reached
+        ac = gym.spaces.unflatten(self._skill_ac_space, ac)
+        return ac, is_goal_reached
 
     def refine(self, refine_vector, skill_id):
-        refine_dict = get_refine_dict(refine_vector)
-        self.skill_actor.reset_params(skill_id)  # Revert to original weights first
-        self.skill_actor.update_params(refine_dict, skill_id)  # Then refine
+        refine_dict = get_refine_dict(self._cfg, refine_vector)
+        self.skill_actor.refine_params(refine_dict, skill_id)
 
     @torch.no_grad()
     def get_refined_skill_actions(self, ob, refine_vector, skill_id, skill_horizon):
@@ -230,11 +236,11 @@ class SeqRefMetaSkillAgent(BaseAgent):
         Returns (B, 30) stacked actions by performing the
         skill_id-th skill (refined by given refine_vector) for skill_horizon steps
         """
-        stacked_ac = np.empty(ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim)
+        stacked_ac = np.empty((ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim))
         for i in range(ob.shape[0]):
-            x = ob[i].numpy()[: self._skill_ac_dim]
+            x = ob[i].cpu().numpy()[: self._skill_ac_dim]
             if refine_vector is not None:
-                self.refine(refine_vector[i].numpy(), skill_id[i])
+                self.refine(refine_vector[i].cpu().numpy(), skill_id[i])
             for j in range(skill_horizon):
                 dx, _ = self.skill_actor.act(x.copy(), skill_id[i])
                 stacked_ac[i, j] = dx
@@ -242,7 +248,7 @@ class SeqRefMetaSkillAgent(BaseAgent):
         stacked_ac = torch.from_numpy(
             stacked_ac.reshape(ob.shape[0], self._cfg.skill_dim * self._skill_ac_dim)
         )
-        return stacked_ac
+        return stacked_ac.to(dtype=self._dtype, device=self._device)
 
     def preprocess(self, ob, aug=None):
         ob = ob.copy()
@@ -274,7 +280,11 @@ class SeqRefAgent(BaseAgent):
 
         # Meta action space = Skill dim + Refine dim
         meta_ac_space = get_meta_ac_space(cfg)
-        self.ms_agent = SeqRefMetaSkillAgent(cfg, ob_space, meta_ac_space)
+        # Skill action space = 7
+        skill_ac_space = ac_space
+        self.ms_agent = SeqRefMetaSkillAgent(
+            cfg, ob_space, meta_ac_space, skill_ac_space
+        )
         self._aug = RandomShiftsAug()
 
         if cfg.phase == "rl":
@@ -346,13 +356,13 @@ class SeqRefAgent(BaseAgent):
         adam_amp = lambda model, lr: AdamAMP(
             model, lr, cfg.weight_decay, cfg.grad_clip, self._device, self._use_amp
         )
-        self.hl_modules = [hl_agent.actor, hl_agent.model, hl_agent.decoder]
+        self.hl_modules = [hl_agent.meta_actor, hl_agent.model, hl_agent.decoder]
 
         self.hl_model_optim = adam_amp([hl_agent.model, hl_agent.decoder], cfg.model_lr)
-        self.hl_actor_optim = adam_amp(hl_agent.actor, cfg.actor_lr)
+        self.hl_actor_optim = adam_amp(hl_agent.meta_actor, cfg.actor_lr)
 
         if cfg.phase == "rl":
-            actor_modules = [hl_agent.actor]
+            actor_modules = [hl_agent.meta_actor]
             model_modules = [hl_agent.model, hl_agent.decoder]
             if cfg.sac:
                 actor_modules += [hl_agent.model.encoder]
@@ -396,6 +406,7 @@ class SeqRefAgent(BaseAgent):
 
     def load_state_dict(self, ckpt):
         self.ms_agent.load_state_dict(ckpt["ms_agent"])
+        self.ms_agent.skill_actor.load_params()
 
         self.hl_model_optim.load_state_dict(ckpt["hl_model_optim"])
         self.hl_actor_optim.load_state_dict(ckpt["hl_actor_optim"])
@@ -646,7 +657,9 @@ class SeqRefAgent(BaseAgent):
 
     def pretrain(self):
         # Pretrain GMM Skills (Load previously trained weights if flagged)
-        self.ms_agent.skill_actor.train(retrain=self._cfg.pretrain.retrain_gmm)
+        if self._cfg.pretrain.retrain_gmm:
+            self.ms_agent.skill_actor.train(retrain=self._cfg.pretrain.retrain_gmm)
+            self._cfg.pretrain.retrain_gmm = False
         # Pretrain Skill Dynamics Model
         train_info = Info()
         sw_data, sw_train = StopWatch(), StopWatch()

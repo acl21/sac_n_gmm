@@ -35,14 +35,15 @@ class GMMSkillActor:
     def load_params(self):
         for _, ds in enumerate(self.skill_ds):
             ds.load_params(self.logger)
+        self.skill_ds_original = copy.deepcopy(self.skill_ds)
 
     def act(self, x, skill_id):
         return self.skill_ds[skill_id].predict_dx(x)
 
-    def update_params(self, delta, skill_id):
-        self.skill_ds[skill_id] = copy.deepcopy(
-            self.skill_ds_original[skill_id]
-        ).update_params(delta)
+    def refine_params(self, delta, skill_id):
+        # Always reset GMM weights to original before refining
+        self.reset_params(skill_id)
+        self.skill_ds[skill_id].refine_params(delta)
 
     def reset_params(self, skill_id):
         self.skill_ds[skill_id] = copy.deepcopy(self.skill_ds_original[skill_id])

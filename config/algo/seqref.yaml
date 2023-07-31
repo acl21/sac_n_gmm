@@ -24,7 +24,7 @@ pretrain:
     input_type: "pos" # or "pos_ori" or "joint"
     demos_dir: "/home/lagandua/projects/skimo_base/refining-skill-sequences/data/demos"
     goal_centered: true
-    is_quaternion: true
+    is_quaternion: false
     train: true
     ignore_bad_demos: true
     dt: 0.02

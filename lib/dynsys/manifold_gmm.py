@@ -33,8 +33,9 @@ class ManifoldGMM(object):
         self.dim = self.dataset.X.shape[-1]
         self.manifold = self.create_manifold()
 
-        # Goal state
+        # Goal position
         self.goal = self.dataset.goal
+        self.fixed_ori = self.dataset.fixed_ori
 
         # GMM
         self.means = None
@@ -88,7 +89,9 @@ class ManifoldGMM(object):
                 f"Could not find Manifold GMM params at {weights_file}"
             )
         else:
-            f"Loading Manifold GMM params for {self.skill} from {weights_file}"
+            logger.info(
+                f"Loading Manifold GMM params for {self.skill} from {weights_file}"
+            )
         gmm = np.load(weights_file)
         gmm.allow_pickle = True
         self.means = np.array(gmm["means"])
@@ -105,8 +108,8 @@ class ManifoldGMM(object):
         )
         logger.info(f"Saved Manifold GMM params of {self.skill} at {weights_file}")
 
-    def update_params(self, delta):
-        """Updates GMM parameters by given delta changes (i.e. SAC's output)
+    def refine_params(self, delta):
+        """Refines GMM parameters by given delta changes (i.e. SAC's output)
 
         Args:
             delta (dict): Changes given by the SAC agent to be made to the GMM parameters
