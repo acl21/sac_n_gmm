@@ -34,12 +34,12 @@ def main(cfg: DictConfig) -> None:
     cfg.gpu = 0
     cfg.wandb = False
     cfg.rolf.phase = "rl"
-    cfg.rolf.warm_up_step = 500
+    cfg.rolf.warm_up_step = 20
     # cfg.rolf.pretrain_ckpt_path = (
     #     "log/calvin.skimo.pretrain.test1.0/ckpt/ckpt_00000005000.pt"
     # )
     cfg.rolf.pretrain_ckpt_path = (
-        "log/calvin.seqref.pretrain.debug.0/ckpt/ckpt_00000005000.pt"
+        "log/calvin.seqref.pretrain.debug.0/ckpt/ckpt_00000200000.pt"
     )
 
     # Make config writable

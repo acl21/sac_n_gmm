@@ -19,6 +19,7 @@ from rolf.networks.distributions import TanhNormal, mc_kl
 from rolf.networks.dreamer import DenseDecoderTanh, ActionDecoder, Decoder
 from rolf.networks.tdmpc_model import TDMPCModel, Encoder, LSTMEncoder
 
+from lib.networks.tpmpc_model import CustomTDMPCModel
 from lib.dynsys.gmm_actor import GMMSkillActor
 from lib.dynsys.utils.refine import (
     get_meta_ac_space,
@@ -46,11 +47,19 @@ class SeqRefMetaSkillAgent(BaseAgent):
         self._refine = False
 
         torch.set_default_dtype(self._dtype)
-        self.model = TDMPCModel(
-            cfg, self._ob_space, self._skill_ac_dim * cfg.skill_dim, self._dtype
+        self.model = CustomTDMPCModel(
+            cfg,
+            self._ob_space,
+            self._meta_ac_dim,
+            self._skill_ac_dim * cfg.skill_dim,
+            self._dtype,
         )
-        self.model_target = TDMPCModel(
-            cfg, self._ob_space, self._skill_ac_dim * cfg.skill_dim, self._dtype
+        self.model_target = CustomTDMPCModel(
+            cfg,
+            self._ob_space,
+            self._meta_ac_dim,
+            self._skill_ac_dim * cfg.skill_dim,
+            self._dtype,
         )
         copy_network(self.model_target, self.model)
         self.meta_actor = ActionDecoder(
@@ -80,24 +89,15 @@ class SeqRefMetaSkillAgent(BaseAgent):
         return (self._seq_space, self._ref_space)
 
     @torch.no_grad()
-    def estimate_value(self, obs, state, ac, horizon, skill_id, skill_horizon):
+    def estimate_value(self, obs, state, ac, dyn_ac, horizon, skill_id, skill_horizon):
         """Imagine a trajectory for `horizon` steps, and estimate the value."""
         value, discount = 0, 1
         for t in range(horizon):
-            state, reward = self.model.imagine_step(state, ac[t])
+            state, reward = self.model.imagine_step(state, ac[t], dyn_ac[t])
             value += discount * reward
             discount *= self._cfg.rl_discount
-        next_obs = self.decoder(state).sample()["ob"]
-        refine_vector = self.meta_actor.act(state)
-        # TODO: Talk to Iman, need next_obs to get stacked actions
-        # Bad next_obs leads to bad GMR predictions
-        next_ac = self.get_refined_skill_actions(
-            next_obs,
-            refine_vector,
-            torch.tensor(skill_id).repeat((next_obs.shape[0], 1)),
-            skill_horizon,
-        )
-        value += discount * torch.min(*self.model.critic(state, next_ac))
+        next_rv = self.meta_actor.act(state)
+        value += discount * torch.min(*self.model.critic(state, next_rv))
         return value
 
     @torch.no_grad()
@@ -122,7 +122,7 @@ class SeqRefMetaSkillAgent(BaseAgent):
             )
             policy_ac.append(ac)
             policy_rv.append(rv)
-            z, _ = self.model.imagine_step(z, policy_ac[t])
+            z, _ = self.model.imagine_step(z, policy_rv[t], policy_ac[t])
             obs = self.decoder(z)  # TODO: Check this with Iman
         policy_ac = torch.stack(policy_ac, dim=0)
         policy_rv = torch.stack(policy_rv, dim=0)
@@ -148,10 +148,11 @@ class SeqRefMetaSkillAgent(BaseAgent):
                 torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)),
                 cfg.skill_horizon,
             ).unsqueeze(0)
+            # sample_ac = torch.clamp(sample_ac, -0.999, 0.999) # TODO: Is this necessary?
             ac = torch.cat([sample_ac, policy_ac], dim=1)
 
             imagine_return = self.estimate_value(
-                obs, z, ac, horizon, skill_id, cfg.skill_horizon
+                obs, z, rv, ac, horizon, skill_id, cfg.skill_horizon
             ).squeeze(-1)
             _, idxs = imagine_return.sort(dim=0)
             idxs = idxs[-cfg.num_elites :]
@@ -243,6 +244,10 @@ class SeqRefMetaSkillAgent(BaseAgent):
                 self.refine(refine_vector[i].cpu().numpy(), skill_id[i])
             for j in range(skill_horizon):
                 dx, _ = self.skill_actor.act(x.copy(), skill_id[i])
+                # TODO: This is bad. But needed to go through everything without errors
+                if np.isnan(dx[0]):
+                    dx = np.zeros_like(dx)
+                    dx[-1] = -1
                 stacked_ac[i, j] = dx
                 x = x + self._cfg.pretrain.dataset.dt * dx
         stacked_ac = torch.from_numpy(
@@ -474,14 +479,14 @@ class SeqRefAgent(BaseAgent):
             hl_agent.model.dynamics.requires_grad_(False)
 
         # ob: {k: BxTx`ob_dim[k]`}, ac: BxTx`ac_dim` (this is refine vector), rew: BxTx1, skill_id: BxTx1
-        o, ac, rew = batch["ob"], batch["ac"], batch["rew"]
+        o, rv, rew = batch["ob"], batch["ac"], batch["rew"]
         done = batch["done"]
         skill_id = batch["skill_id"]
         o = self.preprocess(o, aug=self._aug)
 
         # Get refined stacked actions BxT
         ac = self.ms_agent.get_refined_skill_actions(
-            o[:, 0, :].squeeze(1), ac.squeeze(1), skill_id, cfg.skill_horizon
+            o[:, 0, :].squeeze(1), rv.squeeze(1), skill_id, cfg.skill_horizon
         )
         ac = ac.unsqueeze(1)
 
@@ -498,6 +503,7 @@ class SeqRefAgent(BaseAgent):
             hl_feat_target = flip(hl_agent.model_target.encoder(o))
 
         ob = flip(o, cfg.n_skill + 1)
+        rv = flip(rv)
         ac = flip(ac)
         rew = flip(rew)
         done = flip(done)
@@ -516,7 +522,7 @@ class SeqRefAgent(BaseAgent):
             alpha = self.log_alpha.exp().detach()
             for t in range(cfg.n_skill):
                 z = z_next_pred
-                z_next_pred, reward_pred = hl_agent.model.imagine_step(z, ac[t])
+                z_next_pred, reward_pred = hl_agent.model.imagine_step(z, rv[t], ac[t])
                 if cfg.sac:
                     z = ob[t]["ob"]
                 q_pred = hl_agent.model.critic(z, ac[t])
@@ -532,14 +538,9 @@ class SeqRefAgent(BaseAgent):
                     # And what should be the skill_id
                     rv_next_dist = hl_agent.meta_actor(z_next_q)
                     rv_next = rv_next_dist.rsample()
-                    obs_next = ob[t + 1]["ob"]
-                    ac_next = hl_agent.get_refined_skill_actions(
-                        obs_next, rv_next, skill_id, cfg.skill_horizon
-                    )
-                    ac_next = ac_next.unsqueeze(1)
                     if cfg.sac:  # This will be false
                         z_next_q = ob[t + 1]["ob"]
-                    q_next = torch.min(*hl_agent.model_target.critic(z_next_q, ac_next))
+                    q_next = torch.min(*hl_agent.model_target.critic(z_next_q, rv_next))
 
                     q_target = rew[t] + (1 - done[t].long()) * cfg.rl_discount * q_next
                 rewards.append(reward_pred.detach())
@@ -561,7 +562,7 @@ class SeqRefAgent(BaseAgent):
                 reward_loss += mse(reward_pred, rew[t])
                 # Additional value prediction loss.
                 obs = hl_feat[t] if not cfg.sac else ob[t]["ob"]
-                q_pred = hl_agent.model.critic(obs, ac[t])
+                q_pred = hl_agent.model.critic(obs, rv[t])
                 value_loss += mse(q_pred[0], q_target) + mse(q_pred[1], q_target)
 
             # If only using SAC, model loss is nothing but the critic loss.
@@ -580,7 +581,6 @@ class SeqRefAgent(BaseAgent):
         # Trains high-level policy.
         with torch.autocast(cfg.device, enabled=self._use_amp):
             actor_loss = 0
-            skill_prior_loss = torch.tensor(0.0, device=self._device)
             alpha = self.log_alpha.exp().detach()
             actor_prior_divs = []
             hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
@@ -589,21 +589,16 @@ class SeqRefAgent(BaseAgent):
             # Computes `actor_loss` based on imagined states
             for t in range(cfg.n_skill):
                 z = z_next_pred
-                rv, rv_dist = hl_agent.meta_actor.act(z, return_dist=True)
+                r, r_dist = hl_agent.meta_actor.act(z, return_dist=True)
                 rho = scalars.rho**t
                 if cfg.sac:
                     z = ob[t]["ob"]
-                # TODO: Confirm this again
-                o = ob[t]["ob"]
-                a = hl_agent.get_refined_skill_actions(
-                    o, rv, skill_id, cfg.skill_horizon
-                )
-                actor_loss += -rho * torch.min(*hl_agent.model.critic(z, a))
-                info["actor_std"] = rv_dist.base_dist.base_dist.scale.mean().item()
+                actor_loss += -rho * torch.min(*hl_agent.model.critic(z, r))
+                info["actor_std"] = r_dist.base_dist.base_dist.scale.mean().item()
 
             actor_loss = actor_loss.clamp(-1e5, 1e5).mean()
             actor_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
-        actor_grad_norm = self.actor_optim.step(actor_loss + skill_prior_loss)
+        actor_grad_norm = self.actor_optim.step(actor_loss)
 
         prior_divs = torch.cat(prior_divs)
         actor_prior_divs = torch.stack(actor_prior_divs)
