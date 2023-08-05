@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import gym.spaces
 
-from .utils import MLP, get_activation, weight_init
-from .distributions import TanhNormal
+from rolf.networks.utils import MLP, get_activation, weight_init
+from rolf.networks.distributions import TanhNormal
 
 
 class CustomTDMPCModel(nn.Module):
@@ -43,6 +43,10 @@ class CustomTDMPCModel(nn.Module):
 
     def imagine_step(self, state, ac, dyn_ac):
         out1 = torch.cat([state, dyn_ac], dim=-1)
+
+        if ac is None:
+            return self.dynamics(out1), None
+
         out2 = torch.cat([state, ac], dim=-1)
         return self.dynamics(out1), self.reward(out2).squeeze(-1)
 

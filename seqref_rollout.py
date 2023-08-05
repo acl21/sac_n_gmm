@@ -87,7 +87,7 @@ class SeqRefRolloutRunner(RolloutRunner):
             meta_rollout.add(dict(ob=ob_next))
 
             # Rollout one episode.
-            while not done and skill_id < 4:
+            while not done:
                 state_hl = state_next_hl
 
                 # Sample meta (high-level) action from meta policy.
@@ -112,7 +112,8 @@ class SeqRefRolloutRunner(RolloutRunner):
                     # Break if goal state of the skill_id-th skill is reached
                     if is_goal_reached:
                         skill_id += 1  # TODO: Talk to Iman about this
-                        skill_len = cfg.rolf.skill_horizon
+                        if skill_id == 4:
+                            done = True
                         break
 
                     ob = ob_next

@@ -56,10 +56,11 @@ alpha_init: 1
 alpha_lr: 3e-4
 target_divergence: 1
 alpha_step: 25000
+target_entropy: null
 
 max_global_step: 2000000
-warm_up_step: 10 #5000
-train_every: 10 #500
+warm_up_step: 500 #5000
+train_every: 100 #500
 train_iter: 10
 log_every: 500
 evaluate_every: 5000

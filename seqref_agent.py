@@ -122,7 +122,7 @@ class SeqRefMetaSkillAgent(BaseAgent):
             )
             policy_ac.append(ac)
             policy_rv.append(rv)
-            z, _ = self.model.imagine_step(z, policy_rv[t], policy_ac[t])
+            z, _ = self.model.imagine_step(z, None, policy_ac[t])
             obs = self.decoder(z)  # TODO: Check this with Iman
         policy_ac = torch.stack(policy_ac, dim=0)
         policy_rv = torch.stack(policy_rv, dim=0)
@@ -297,6 +297,11 @@ class SeqRefAgent(BaseAgent):
                 np.log(cfg.alpha_init), device=self._device, requires_grad=True
             )
 
+            if cfg.target_entropy is not None:
+                self._target_entropy = cfg.target_entropy
+            else:
+                self._target_entropy = -gym.spaces.flatdim(meta_ac_space)
+
         self._build_optims()
         self._build_buffers()
         self._log_creation()
@@ -316,7 +321,7 @@ class SeqRefAgent(BaseAgent):
         self._horizon = cfg.n_skill * cfg.skill_horizon
 
         # Per-episode replay buffer.
-        buffer_keys = ["ob", "ac", "rew", "done"]
+        buffer_keys = ["ob", "ac", "rew", "done", "skill_id"]
         sampler = SeqSampler(cfg.n_skill, sample_last_more=cfg.sample_last_more)
         self.hl_buffer = ReplayBufferEpisode(
             buffer_keys, cfg.buffer_size, sampler.sample_func_one_more_ob, cfg.precision
@@ -486,7 +491,7 @@ class SeqRefAgent(BaseAgent):
 
         # Get refined stacked actions BxT
         ac = self.ms_agent.get_refined_skill_actions(
-            o[:, 0, :].squeeze(1), rv.squeeze(1), skill_id, cfg.skill_horizon
+            o["ob"][:, 0, :].squeeze(1), rv.squeeze(1), skill_id, cfg.skill_horizon
         )
         ac = ac.unsqueeze(1)
 
@@ -516,7 +521,6 @@ class SeqRefAgent(BaseAgent):
             consistency_loss = 0
             reward_loss = 0
             value_loss = 0
-            prior_divs = []
             q_preds = [[], []]
             q_targets = []
             alpha = self.log_alpha.exp().detach()
@@ -525,7 +529,7 @@ class SeqRefAgent(BaseAgent):
                 z_next_pred, reward_pred = hl_agent.model.imagine_step(z, rv[t], ac[t])
                 if cfg.sac:
                     z = ob[t]["ob"]
-                q_pred = hl_agent.model.critic(z, ac[t])
+                q_pred = hl_agent.model.critic(z, rv[t])
 
                 with torch.no_grad():
                     # `z` for contrastive learning
@@ -557,7 +561,7 @@ class SeqRefAgent(BaseAgent):
 
                 # Additional reward prediction loss.
                 reward_pred = hl_agent.model.reward(
-                    torch.cat([hl_feat[t], ac[t]], dim=-1)
+                    torch.cat([hl_feat[t], rv[t]], dim=-1)
                 ).squeeze(-1)
                 reward_loss += mse(reward_pred, rew[t])
                 # Additional value prediction loss.
@@ -582,7 +586,6 @@ class SeqRefAgent(BaseAgent):
         with torch.autocast(cfg.device, enabled=self._use_amp):
             actor_loss = 0
             alpha = self.log_alpha.exp().detach()
-            actor_prior_divs = []
             hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
             z = z_next_pred = hl_feat[0]
 
@@ -600,15 +603,17 @@ class SeqRefAgent(BaseAgent):
             actor_loss.register_hook(lambda grad: grad * (1 / cfg.n_skill))
         actor_grad_norm = self.actor_optim.step(actor_loss)
 
-        prior_divs = torch.cat(prior_divs)
-        actor_prior_divs = torch.stack(actor_prior_divs)
         # Update alpha.
         if cfg.fixed_alpha is None:
             with torch.autocast(cfg.device, enabled=self._use_amp):
                 alpha = self.log_alpha.exp()
-                alpha_loss = alpha * (
-                    cfg.target_divergence - actor_prior_divs.mean().detach()
-                )
+                # TODO: Talk to Iman about this, double check this, do we also modify policy improvement?
+                # Fixed alpha for calvin so no problem but in case we change this in the future
+                # Taken from sac_agent.py in rolf
+                z = hl_feat[0]
+                _, r_dist = hl_agent.meta_actor.act(z, return_dist=True)
+                log_pi = r_dist.log_prob(r_dist.rsample())
+                alpha_loss = -(alpha * (log_pi + self._target_entropy).detach()).mean()
             self.alpha_optim.step(alpha_loss)
 
         # Update model target.
@@ -732,7 +737,7 @@ class SeqRefAgent(BaseAgent):
             for t in range(L):
                 h = h_next_pred
                 a = hl_ac[t].detach()
-                h_next_pred, _ = hl_agent.model.imagine_step(h, a)
+                h_next_pred, _ = hl_agent.model.imagine_step(h, None, a)
                 h_next_target = hl_feat_target[t + 1]
                 rho = scalars.rho**t
                 consistency_loss += rho * mse(h_next_pred, h_next_target).mean(dim=1)

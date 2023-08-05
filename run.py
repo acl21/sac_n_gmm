@@ -30,16 +30,18 @@ class SkillRLRun(Run):
 @hydra.main(config_path="config", config_name="seqref_calvin")
 def main(cfg: DictConfig) -> None:
     # Debugging
-    cfg.run_prefix = "debug"
+    cfg.run_prefix = "debug2"
     cfg.gpu = 0
     cfg.wandb = False
+
+    # RL
     cfg.rolf.phase = "rl"
-    cfg.rolf.warm_up_step = 20
-    # cfg.rolf.pretrain_ckpt_path = (
-    #     "log/calvin.skimo.pretrain.test1.0/ckpt/ckpt_00000005000.pt"
-    # )
+    cfg.rolf.warm_up_step = 200
+    # # cfg.rolf.pretrain_ckpt_path = (
+    # #     "log/calvin.skimo.pretrain.test1.0/ckpt/ckpt_00000005000.pt"
+    # # )
     cfg.rolf.pretrain_ckpt_path = (
-        "log/calvin.seqref.pretrain.debug.0/ckpt/ckpt_00000200000.pt"
+        "log/calvin.seqref.pretrain.debug2.0/ckpt/ckpt_00000030000.pt"
     )
 
     # Make config writable
