@@ -15,7 +15,7 @@ rolf:
   pretrain:
     data_path: data/calvin.gz
     split: {train: 0.99, val: 0.01, test: 0.0}
-    batch_size: 10 #512
+    batch_size: 512
     log_every: 100
     evaluate_every: 500
     ckpt_every: 5000
@@ -23,7 +23,7 @@ rolf:
   n_skill: 1
   min_std: 0.01
   use_prior: true
-  batch_size: 10 #256
+  batch_size: 256
   scalars:
     ll_actor: 2
   refine: 

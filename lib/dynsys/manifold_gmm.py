@@ -225,7 +225,7 @@ class ManifoldGMM(object):
         )
         new_x = x + self.dataset.dt * dx[0]
         dist_to_goal = np.round(np.linalg.norm(new_x - self.goal), 3)
-        return dx[0], dist_to_goal <= 0.01
+        return dx[0], dist_to_goal <= 0.025
 
     def get_reshaped_means(self):
         """Reshape means from (n_comp, 2) to (n_comp, 2, state_size)"""

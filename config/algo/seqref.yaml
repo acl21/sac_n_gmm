@@ -36,12 +36,14 @@ pretrain:
   log_every: 10
   evaluate_every: 100
   ckpt_every: 1000
-  batch_size: 10 #256
+  batch_size: 256
   split: {train: 0.99, val: 0.01, test: 0.0}
   n_vis: 1
   data_path: null
 
-
+# Used only by skill_evaluator.py
+render: false
+record: true
 
 # Training
 joint_training: true

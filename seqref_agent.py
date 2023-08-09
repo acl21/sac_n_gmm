@@ -75,13 +75,18 @@ class SeqRefMetaSkillAgent(BaseAgent):
 
     def state_dict(self):
         return {
+            "actor": self.meta_actor.state_dict(),
             "model": self.model.state_dict(),
             "model_target": self.model_target.state_dict(),
+            "decoder": self.decoder.state_dict(),
         }
 
     def load_state_dict(self, ckpt):
         self.model.load_state_dict(ckpt["model"])
         self.model_target.load_state_dict(ckpt["model_target"])
+        self.decoder.load_state_dict(ckpt["decoder"])
+        if "actor" in ckpt.keys():
+            self.meta_actor.load_state_dict(ckpt["actor"])
         self.to(self._device)
 
     @property
@@ -682,6 +687,7 @@ class SeqRefAgent(BaseAgent):
 
     def pretrain_eval(self):
         batch = self._pretrain_val_buffer.sample(self._cfg.pretrain.batch_size)
+        self._dynamics_visual_eval()
         return self._pretrain(batch, is_train=False)
 
     def _pretrain(self, batch, is_train=True):
@@ -764,3 +770,68 @@ class SeqRefAgent(BaseAgent):
                 )
 
         return info.get_dict()
+
+    def _dynamics_visual_eval(self):
+        """
+        Evaluate the skill dymanics model and its components, visualize predictions and compare them with ground truth
+        """
+        plot_traj_len = 15
+        cfg = self._cfg
+        data = pickle.load(gzip.open(cfg.pretrain.data_path, "rb"))
+        rand_idx = np.random.randint(0, len(data))
+        # Ignore and sample again if chosen radom trajectory is incomplete
+        while len(data[rand_idx]["obs"]) < len(data[rand_idx]["dones"]):
+            rand_idx = np.random.randint(0, len(data))
+
+        traj = data[rand_idx]
+        obs = []
+        decoded_obs = []
+        with torch.no_grad():
+            for i in range(0, len(traj["obs"]) - cfg.skill_horizon, cfg.skill_horizon):
+                ob = traj["obs"][i][:21]
+                obs.append(ob)
+                ac = traj["actions"][i : i + cfg.skill_horizon, :3].reshape(1, -1)
+                ac = torch.from_numpy(ac).to(self._device)
+
+                ob_dict = {"ob": torch.from_numpy(ob).unsqueeze(0).to(self._device)}
+                z = self.ms_agent.model.encoder(ob_dict)
+                next_z, _ = self.ms_agent.model.imagine_step(z, None, ac)
+
+                dec_ob = self.ms_agent.decoder(next_z)  # returns a mixed distribution
+                decoded_obs.append(dec_ob["ob"].mode()[0].detach().cpu().numpy())
+                if len(decoded_obs) >= plot_traj_len:
+                    break
+
+        obs = np.array(obs)
+        decoded_obs = np.array(decoded_obs)
+        # Plotting
+        x_gt, y_gt, z_gt = (
+            obs[:plot_traj_len, 0],
+            obs[:plot_traj_len, 1],
+            obs[:plot_traj_len, 2],
+        )
+        x_pred, y_pred, z_pred = (
+            decoded_obs[:plot_traj_len, 0],
+            decoded_obs[:plot_traj_len, 1],
+            decoded_obs[:plot_traj_len, 2],
+        )
+
+        # Create a new 3D plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection="3d")
+
+        # Plot the ground truth and predicted trajectories
+        ax.plot(x_gt, y_gt, z_gt, color="blue", marker="o", label="Ground Truth")
+        ax.plot(
+            x_pred, y_pred, z_pred, color="red", marker="o", label="Dynamics Predicted"
+        )
+
+        # Add a legend
+        ax.legend()
+
+        # Show the plot
+        plt.savefig(
+            str(
+                f"log/temp/{self._update_iter}.png",
+            )
+        )

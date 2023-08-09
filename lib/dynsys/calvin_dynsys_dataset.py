@@ -52,7 +52,7 @@ class CALVINDynSysDataset(object):
 
         # Get the euler angles best for the skill
         if self.skill in ["open_drawer", "close_drawer", "turn_on_led"]:
-            self.fixed_ori = np.array([3.142, 0.08, 1.5])
+            self.fixed_ori = np.array([3.14, 0.08, 1.5])
         elif self.skill in ["turn_on_lightbulb", "move_slider_left"]:
             self.fixed_ori = np.array([3.0, -0.4, 1.5])
 
@@ -60,15 +60,18 @@ class CALVINDynSysDataset(object):
         # Convert Euler orientations in self.X to Quaternion when flagged
         if is_quaternion:
             self.fixed_ori = np.array(pybullet.getQuaternionFromEuler(self.fixed_ori))
-            if self.state_type == "ori":
-                self.X = np.apply_along_axis(
-                    pybullet.getQuaternionFromEuler, -1, self.X
-                )
-            elif self.state_type == "pos_ori":
-                oris = np.apply_along_axis(
-                    pybullet.getQuaternionFromEuler, -1, self.X[:, :, 3:]
-                )
-                self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
+            # Make fixed_ori quaternion positive
+            if self.fixed_ori[0] < 0:
+                self.fixed_ori *= -1
+            oris = np.apply_along_axis(
+                pybullet.getQuaternionFromEuler, -1, self.X[:, :, 3:]
+            )
+            # Make all quaternions positive
+            for traj in range(oris.shape[0]):
+                for t_step in range(oris.shape[1]):
+                    if oris[traj, t_step, 0] < 0:
+                        oris[traj, t_step, :] *= -1
+            self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
         # Average end point i.e., goal of the trajectory (useful during inference)
         if "joint" not in self.state_type:
@@ -120,8 +123,6 @@ class CALVINDynSysDataset(object):
             start, end = 1, 7
         elif "pos" in state_type:
             start, end = 1, 4
-        elif "ori" in state_type:
-            start, end = 4, 7
         elif "grip" in state_type:
             start, end = 7, 8
         return start, end
