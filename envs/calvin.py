@@ -42,8 +42,13 @@ class CalvinEnv(PlayTableSimEnv):
         self._t = 0
         self.sequential = True
 
+        self.ee_noise = np.array([0.1, 0.1, 0.05])  # Units: meters
+        self.init_pos = None
+        self.set_init_pos()
+
     def reset(self):
         obs = super().reset()
+        obs = self.calibrate_EE_start_state(obs)
         self.start_info = self.get_info()
         self._t = 0
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)
@@ -141,3 +146,59 @@ class CalvinEnv(PlayTableSimEnv):
         )
         info.update(self.solved_subtasks)
         return info
+
+    def set_init_pos(self):
+        """Sets the initial position of the end effector based on the task."""
+        first_skill = self.tasks_to_complete[0]
+        reference = {
+            "open_drawer": np.array([0.082, -0.175, 0.532]),
+            "turn_on_lightbulb": np.array([0.059, -0.133, 0.493]),
+            "move_slider_left": np.array([0.021, -0.116, 0.542]),
+            "turn_on_led": np.array([0.053, -0.092, 0.505]),
+        }
+        if first_skill in reference.keys():
+            self.init_pos = reference[first_skill]
+        else:
+            ValueError(f"Skill {first_skill} is not recognized.")
+
+    def sample_ee_pose(self):
+        """Samples a random end effector pose within a small range around the initial pose."""
+        if self.init_pos is None:
+            self.init_gripper_pos = self.robot.target_pos
+        else:
+            self.init_gripper_pos = self.init_pos
+        self.init_gripper_orn = self.robot.target_orn
+        offset = np.random.uniform(-self.ee_noise, self.ee_noise, 3)
+        gripper_pos = self.init_gripper_pos + offset
+        gripper_orn = self.init_gripper_orn
+        return gripper_pos, gripper_orn
+
+    def custom_step(self, action):
+        """Called only by calibrate_EE_start_state to perform a absolute steps in the environment."""
+        # Transform gripper action to discrete space
+        env_action = action.copy()
+        env_action[-1] = (int(action[-1] >= 0) * 2) - 1
+        self.robot.apply_action(env_action)
+        for _ in range(self.action_repeat):
+            self.p.stepSimulation(physicsClientId=self.cid)
+        self.scene.step()
+        obs = self.get_obs()
+        return obs
+
+    def calibrate_EE_start_state(self, obs, error_margin=0.01, max_checks=15):
+        """Samples a random but good starting point and moves the end effector to that point."""
+        ee_pos, ee_orn = self.sample_ee_pose()
+        count = 0
+        action = np.array([ee_pos, ee_orn, -1], dtype=object)
+        while np.linalg.norm(obs[:3] - ee_pos) > error_margin:
+            obs = self.custom_step(action)
+            if count >= max_checks:
+                print("CALVIN is struggling to place the EE at the right initial pose.")
+                print("Current EE pos: ", obs[:3])
+                print("Desired EE pos: ", ee_pos)
+                # Sample and try again
+                ee_pos, ee_orn = self.sample_ee_pose()
+                action = np.array([ee_pos, ee_orn, -1], dtype=object)
+                count = 0
+            count += 1
+        return obs

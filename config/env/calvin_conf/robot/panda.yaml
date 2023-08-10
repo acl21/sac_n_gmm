@@ -18,5 +18,5 @@ max_velocity: 2
 use_ik_fast: false
 magic_scaling_factor_pos: 1 # 1.6
 magic_scaling_factor_orn: 1 # 2.2
-use_target_pose: true
+use_target_pose: false
 euler_obs: true
