@@ -34,8 +34,11 @@ class ManifoldGMM(object):
         self.manifold = self.create_manifold()
 
         # Goal position
+        self.start = self.dataset.start
         self.goal = self.dataset.goal
         self.fixed_ori = self.dataset.fixed_ori
+        self.pos_dt = self.dataset.dt
+        self.ori_dt = cfg.dataset.ori_dt
 
         # GMM
         self.means = None
@@ -216,16 +219,15 @@ class ManifoldGMM(object):
         """
         Goal centers the input x and returns dx
         """
-        dx, _, __ = manifold_gmr(
-            (x - self.goal).reshape(1, -1),
+        dx_pos, _, __ = manifold_gmr(
+            (x[:3] - self.goal).reshape(1, -1),
             self.manifold,
             self.means,
             self.covariances,
             self.priors,
         )
-        new_x = x + self.dataset.dt * dx[0]
-        dist_to_goal = np.round(np.linalg.norm(new_x - self.goal), 3)
-        return dx[0], dist_to_goal <= 0.025
+        dx_ori = self.get_minimal_rotation(x[3:6])
+        return dx_pos[0], dx_ori
 
     def get_reshaped_means(self):
         """Reshape means from (n_comp, 2) to (n_comp, 2, state_size)"""
@@ -297,3 +299,11 @@ class ManifoldGMM(object):
             covariances=covariances,
             save_dir=self.skills_dir,
         )
+
+    def normalize_angle(self, angle):
+        """Normalizes the input angle to the range [-pi, pi)."""
+        return (angle + np.pi) % (2 * np.pi) - np.pi
+
+    def get_minimal_rotation(self, current_angles):
+        """Computes the minimal rotation required to get from current_angles to goal_angles."""
+        return self.normalize_angle(self.fixed_ori - current_angles) / self.ori_dt

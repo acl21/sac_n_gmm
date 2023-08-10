@@ -52,9 +52,9 @@ class CALVINDynSysDataset(object):
 
         # Get the euler angles best for the skill
         if self.skill in ["open_drawer", "close_drawer", "turn_on_led"]:
-            self.fixed_ori = np.array([3.14, 0.08, 1.5])
+            self.fixed_ori = np.array([3.14, 0.0, 1.5])
         elif self.skill in ["turn_on_lightbulb", "move_slider_left"]:
-            self.fixed_ori = np.array([3.0, -0.4, 1.5])
+            self.fixed_ori = np.array([3.14, -0.5, 1.5])
 
         # Convert fixed ori from Euler to Quaternion when flagged
         # Convert Euler orientations in self.X to Quaternion when flagged
@@ -73,10 +73,12 @@ class CALVINDynSysDataset(object):
                         oris[traj, t_step, :] *= -1
             self.X = np.concatenate([self.X[:, :, :3], oris], axis=-1)
 
-        # Average end point i.e., goal of the trajectory (useful during inference)
+        # Average start and end point i.e., start and goal of the trajectory (useful during inference)
         if "joint" not in self.state_type:
+            self.start = np.mean(self.X[:, 0, :], axis=0)
             self.goal = np.mean(self.X[:, -1, :], axis=0)
         else:
+            self.start = 0
             self.goal = 0
 
         if self.goal_centered:
