@@ -215,17 +215,14 @@ class SeqRefMetaSkillAgent(BaseAgent):
 
     def skill_act(self, obs, refine_vector, skill_id, is_train=False):
         """Takes x, performs horizon steps with skill_id-th skill, returns stacked dx-es"""
-        x = obs[:3]
         if refine_vector is not None:
             self.refine(refine_vector.cpu().numpy(), skill_id)
-        dx, is_goal_reached = self.skill_actor.act(x.copy(), skill_id)
-        # Relative difference between current ori and fixed_ori of the skill
-        dx_ori = self.skill_actor.skill_ds[skill_id].fixed_ori - obs[3:6]
+        dx_pos, dx_ori = self.skill_actor.act(obs.copy(), skill_id)
         ac = np.append(
-            dx, np.append(dx_ori, -1)
+            dx_pos, np.append(dx_ori, -1)
         )  # pos, ori, gripper_width i.e., size=7
         ac = gym.spaces.unflatten(self._skill_ac_space, ac)
-        return ac, is_goal_reached
+        return ac
 
     def refine(self, refine_vector, skill_id):
         refine_dict = get_refine_dict(self._cfg, refine_vector)
@@ -244,17 +241,21 @@ class SeqRefMetaSkillAgent(BaseAgent):
         """
         stacked_ac = np.empty((ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim))
         for i in range(ob.shape[0]):
-            x = ob[i].cpu().numpy()[: self._skill_ac_dim]
+            x = ob[i].cpu().numpy()
+            x_pos = x[:3].copy()
             if refine_vector is not None:
                 self.refine(refine_vector[i].cpu().numpy(), skill_id[i])
             for j in range(skill_horizon):
-                dx, _ = self.skill_actor.act(x.copy(), skill_id[i])
+                dx_pos, _ = self.skill_actor.act(x.copy(), skill_id[i])
                 # TODO: This is bad. But needed to go through everything without errors
-                if np.isnan(dx[0]):
-                    dx = np.zeros_like(dx)
-                    dx[-1] = -1
-                stacked_ac[i, j] = dx
-                x = x + self._cfg.pretrain.dataset.dt * dx
+                if np.isnan(dx_pos[0]):
+                    Logger.warning("GMM returned NaN. Setting dx to 0.")
+                    Logger.warning(
+                        f"Skill ID: {skill_id[i]}, RefineVector: {refine_vector[i]}, State: {x[:3]}"
+                    )
+                    dx_pos = np.zeros_like(dx_pos)
+                stacked_ac[i, j] = dx_pos
+                x_pos = x_pos + self._cfg.pretrain.dataset.dt * dx_pos
         stacked_ac = torch.from_numpy(
             stacked_ac.reshape(ob.shape[0], self._cfg.skill_dim * self._skill_ac_dim)
         )

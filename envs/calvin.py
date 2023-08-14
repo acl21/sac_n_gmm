@@ -49,6 +49,7 @@ class CalvinEnv(PlayTableSimEnv):
     def reset(self):
         obs = super().reset()
         obs = self.calibrate_EE_start_state(obs)
+        self.robot.update_target_variables()
         self.start_info = self.get_info()
         self._t = 0
         self.tasks_to_complete = copy.deepcopy(self.target_tasks)

@@ -41,13 +41,14 @@ def get_meta_ac_space(cfg):
     """
     # action_space = {"seq": gym.spaces.Discrete(cfg.skill_dim)}
     action_space = None
+    refine_scale_max = 0.05  # Max refine change will only move the means by max 5 cm
     if cfg.refine.do:
         ref_param_space = get_ref_param_space(cfg)
-        means_high = np.ones(ref_param_space["means"].shape[0])
+        means_high = refine_scale_max * np.ones(ref_param_space["means"].shape[0])
         if cfg.refine.mean_shift:
             ref_action_high = means_high
         else:
-            priors_high = np.ones(ref_param_space["priors"].shape[0])
+            priors_high = refine_scale_max * np.ones(ref_param_space["priors"].shape[0])
             ref_action_high = np.concatenate((priors_high, means_high), axis=-1)
             if cfg.refine.adapt_cov:
                 cov_high = np.ones(ref_param_space["covariances"].shape[0])

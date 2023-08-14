@@ -98,8 +98,7 @@ class CALVINDynSysDataset(object):
 
         # Get first order derivative dX from X
         self.dX = np.empty((self.X.shape[0], self.X.shape[1], self.X.shape[2]))
-        self.dX[:, :-2, :] = (self.X[:, 2:, :] - self.X[:, :-2, :]) / self.dt
-        self.dX[:, -2, :] = (self.X[:, -1, :] - self.X[:, -2, :]) / self.dt
+        self.dX[:, :-1, :] = (self.X[:, 1:, :] - self.X[:, :-1, :]) / self.dt
         self.dX[:, -1, :] = np.zeros(self.dX.shape[-1])
 
     def normalize(self, x):

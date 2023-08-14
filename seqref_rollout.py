@@ -8,6 +8,15 @@ import gym.spaces
 from rolf.utils import Logger, Info, Every
 from rolf.algorithms.rollout import Rollout, RolloutRunner
 
+from enum import Enum
+
+
+class SKILLS(Enum):
+    open_drawer = 0
+    turn_on_lightbulb = 1
+    move_slider_left = 2
+    turn_on_led = 3
+
 
 class SeqRefRolloutRunner(RolloutRunner):
     """Rollout hierarchical policy."""
@@ -22,6 +31,7 @@ class SeqRefRolloutRunner(RolloutRunner):
         """
         self._cfg = cfg
         self._env = env
+        self.task = np.copy(self._env.env.env.env.target_tasks)
         self._env_eval = env_eval
         self._agent = agent
         self._ms_agent = agent.ms_agent
@@ -64,14 +74,7 @@ class SeqRefRolloutRunner(RolloutRunner):
         ep_info = Info()
         episode = 0
         rollout_len = 0
-        skill_ids = np.concatenate(
-            [
-                np.repeat(x, env.max_episode_steps / len(env.target_tasks))
-                for x in range(len(env.target_tasks))
-            ]
-        )
         skill_id = 0
-        is_goal_reached = False
 
         while True:
             done = False
@@ -80,8 +83,8 @@ class SeqRefRolloutRunner(RolloutRunner):
             ob_next = env.reset()
             ob = ob_next
             state_next_hl = None
-            skill_id = 0
-            is_goal_reached = False
+            skill_count = 0
+            skill_id = SKILLS[self.task[skill_count]].value
 
             rollout.add(dict(ob=ob_next))
             meta_rollout.add(dict(ob=ob_next))
@@ -109,19 +112,10 @@ class SeqRefRolloutRunner(RolloutRunner):
                 skill_len = 0
                 meta_rew = 0
                 while not done and skill_len < cfg.rolf.skill_horizon:
-                    # Break if goal state of the skill_id-th skill is reached
-                    if is_goal_reached:
-                        skill_id += 1  # TODO: Talk to Iman about this
-                        if skill_id == 4:
-                            done = True
-                        break
-
                     ob = ob_next
 
                     # Sample low-level action from skill policy.
-                    ac, is_goal_reached = ms_agent.skill_act(
-                        ob["ob"], None, skill_id, is_train=False
-                    )
+                    ac = ms_agent.skill_act(ob["ob"], None, skill_id, is_train=False)
 
                     # Take a step.
                     ob_next, reward, done, info = env.step(ac)
@@ -133,6 +127,13 @@ class SeqRefRolloutRunner(RolloutRunner):
                     ep_rew += reward
                     skill_len += 1
                     meta_rew += reward
+
+                    if reward > 0:
+                        skill_count += 1
+                        if skill_count == 4:
+                            done = True
+                        else:
+                            skill_id = SKILLS[self.task[skill_count]].value
 
                     flat_ac = gym.spaces.flatten(env.action_space, ac)
                     rollout.add(dict(ob=ob_next, ac=flat_ac, done=done))
@@ -198,26 +199,20 @@ class SeqRefRolloutRunner(RolloutRunner):
         ob_next = env.reset()
         ob = ob_next
         state_next_hl = None
-        skill_ids = np.concatenate(
-            [
-                np.repeat(x, env.max_episode_steps / len(env.target_tasks))
-                for x in range(len(env.target_tasks))
-            ]
-        )
-        skill_id = 0
-        is_goal_reached = False
+        skill_count = 0
+        skill_id = SKILLS[self.task[skill_count]].value
 
         record_frames = []
         if record_video:
             record_frames.append(self._render_frame(ep_len, ep_rew))
 
         # Rollout one episode.
-        while not done and skill_id < 4:
+        while not done:
             state_hl = state_next_hl
 
             # Sample meta action from meta policy.
             meta_ac, state_next_hl = ms_agent.meta_act(
-                ob_next, state_hl, is_train=False
+                ob_next, skill_id, state_hl, is_train=False
             )
 
             # Update skill parameters with meta actions (refine GMM here)
@@ -225,18 +220,10 @@ class SeqRefRolloutRunner(RolloutRunner):
 
             skill_len = 0
             while not done and skill_len < cfg.rolf.skill_horizon:
-                # Break if goal state of the skill_id-th skill is reached
-                if is_goal_reached:
-                    skill_id += 1  # TODO: Talk to Iman about this
-                    skill_len = cfg.rolf.skill_horizon
-                    break
-
                 ob = ob_next
 
                 # Sample low-level action from skill policy.
-                ac, is_goal_reached = ms_agent.skill_act(
-                    ob["ob"], None, skill_id, is_train=False
-                )
+                ac = ms_agent.skill_act(ob["ob"], None, skill_id, is_train=False)
 
                 # Take a step.
                 ob_next, reward, done, info = env.step(ac)
@@ -246,6 +233,13 @@ class SeqRefRolloutRunner(RolloutRunner):
                 ep_len += 1
                 ep_rew += reward
                 skill_len += 1
+
+                if reward > 0:
+                    skill_count += 1
+                    if skill_count == 4:
+                        done = True
+                    else:
+                        skill_id = SKILLS[self.task[skill_count]].value
 
                 flat_ac = gym.spaces.flatten(env.action_space, ac)
                 rollout.add(dict(ob=ob_next, ac=flat_ac, done=done))

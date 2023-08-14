@@ -21,8 +21,9 @@ class TaskEval(object):
         self.env = make_env(cfg.env.id, cfg.env, cfg.seed, cfg.rolf.name)
         self.env_ac_space = self.env.action_space
         self.skills = self.cfg.rolf.pretrain.skills
-        self.env.env.env.env.target_tasks = np.copy(self.skills)
-        self.env.env.env.env.tasks_to_complete = np.copy(self.skills)
+        self.env.env.env.env.target_tasks = np.copy(self.skills).tolist()
+        self.env.env.env.env.tasks_to_complete = np.copy(self.skills).tolist()
+        self.env.env.env.env.set_init_pos()
         self.task_name = "_".join(self.skills)
         self.actor = GMMSkillActor(self.cfg.rolf.pretrain)
         self.actor.load_params()
@@ -51,7 +52,7 @@ class TaskEval(object):
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         rollout_return = 0
         skill_id = 0
-        num_evals = 100
+        num_evals = 50
         for eval_no in range(num_evals):
             obs = self.env.reset()
             if self.cfg.rolf.record:
@@ -70,8 +71,9 @@ class TaskEval(object):
                     self.env.render()
 
                 if reward > 0:
+                    self.logger.info(f"Skill: {skill_id}, Step: {step}")
                     skill_id += 1
-                    if skill_id == 4:
+                    if skill_id == len(self.skills) + 1:
                         done = True
 
                 if done:
