@@ -1,5 +1,7 @@
 import pickle
 import gzip
+import copy
+import os
 
 import numpy as np
 import torch
@@ -26,6 +28,9 @@ from lib.dynsys.utils.refine import (
     get_refine_dict,
 )
 from seqref_rollout import SeqRefRolloutRunner
+
+import multiprocessing as mp
+import time
 
 
 class SeqRefMetaSkillAgent(BaseAgent):
@@ -120,9 +125,9 @@ class SeqRefMetaSkillAgent(BaseAgent):
         for t in range(horizon):
             rv = self.meta_actor.act(z)
             ac = self.get_refined_skill_actions(
-                obs,
-                rv,
-                torch.tensor(skill_id).repeat((obs.shape[0], 1)),
+                obs.cpu().numpy(),
+                rv.cpu().numpy(),
+                torch.tensor(skill_id).repeat((obs.shape[0], 1)).cpu().numpy(),
                 cfg.skill_horizon,
             )
             policy_ac.append(ac)
@@ -146,13 +151,16 @@ class SeqRefMetaSkillAgent(BaseAgent):
             )
             sample_rv = torch.clamp(sample_rv, -0.999, 0.999)
             rv = torch.cat([sample_rv, policy_rv], dim=1)
-
+            # start = time.time()
             sample_ac = self.get_refined_skill_actions(
-                obs[: cfg.num_sample_traj],
-                sample_rv.squeeze(0),
-                torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)),
+                obs[: cfg.num_sample_traj].cpu().numpy(),
+                sample_rv.squeeze(0).cpu().numpy(),
+                torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)).cpu().numpy(),
                 cfg.skill_horizon,
             ).unsqueeze(0)
+            # end = time.time()
+            # print("Method Runtime: ", end - start)
+
             # sample_ac = torch.clamp(sample_ac, -0.999, 0.999) # TODO: Is this necessary?
             ac = torch.cat([sample_ac, policy_ac], dim=1)
 
@@ -206,8 +214,10 @@ class SeqRefMetaSkillAgent(BaseAgent):
             else:
                 # TODO: Do we have to make plan() batch supported? Since they
                 # always use it in rollouts
+                # Logger.info("Planning starts")
                 ac, mean = self.plan(ob, skill_id, mean, is_train)
                 ac = ac.cpu().numpy()
+                # Logger.info("Planning ends")
             ac = gym.spaces.unflatten(self._meta_ac_space, ac)
         self.model.train()
         self.meta_actor.train()
@@ -229,6 +239,51 @@ class SeqRefMetaSkillAgent(BaseAgent):
         self.skill_actor.refine_params(refine_dict, skill_id)
 
     @torch.no_grad()
+    def get_refined_skill_actions_parallel(
+        self, ob, refine_vector, skill_id, skill_horizon
+    ):
+        """
+        Input
+            ob: numpy array (B, 21)
+            refine_vector: numpy array (B, self._meta_ac_dim)
+            skill_id: numpy array (B, 1)
+            skill_horizon: int
+        Returns tensor (B, 30) stacked actions by performing the
+        skill_id-th skill (refined by given refine_vector) for skill_horizon steps
+        """
+        splits = 8  # min([os.cpu_count(), ob.shape[0]])
+        cfg_list = [copy.copy(self._cfg) for _ in range(splits)]
+        skill_actor_list = [copy.deepcopy(self.skill_actor) for _ in range(splits)]
+        ob_list = list(np.array_split(ob, splits))
+        rv_list = list(np.array_split(refine_vector, splits))
+        skill_id_list = list(np.array_split(skill_id, splits))
+        skill_horizon_list = [skill_horizon for _ in range(splits)]
+        skill_ac_dim_list = [self._skill_ac_dim for _ in range(splits)]
+        arguments = list(
+            zip(
+                cfg_list,
+                skill_actor_list,
+                ob_list,
+                rv_list,
+                skill_id_list,
+                skill_horizon_list,
+                skill_ac_dim_list,
+            )
+        )
+
+        pool = mp.Pool(processes=splits)
+        start = time.time()
+        stacked_acs = pool.starmap(refined_skill_actions, arguments)
+        end = time.time()
+        print("Starmap Runtime: ", end - start)
+        pool.close()
+        pool.join()  # TODO: Check if this slows the main thread down
+
+        return torch.from_numpy(np.concatenate(stacked_acs)).to(
+            dtype=self._dtype, device=self._device
+        )
+
+    @torch.no_grad()
     def get_refined_skill_actions(self, ob, refine_vector, skill_id, skill_horizon):
         """
         Input
@@ -241,17 +296,16 @@ class SeqRefMetaSkillAgent(BaseAgent):
         """
         stacked_ac = np.empty((ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim))
         for i in range(ob.shape[0]):
-            x = ob[i].cpu().numpy()
-            x_pos = x[:3].copy()
+            x_pos = ob[i, :3].copy()
             if refine_vector is not None:
-                self.refine(refine_vector[i].cpu().numpy(), skill_id[i])
+                self.refine(refine_vector[i], skill_id[i, 0])
             for j in range(skill_horizon):
-                dx_pos, _ = self.skill_actor.act(x.copy(), skill_id[i])
+                dx_pos = self.skill_actor.skill_ds[skill_id[i, 0]].predict_dx_pos(x_pos)
                 # TODO: This is bad. But needed to go through everything without errors
                 if np.isnan(dx_pos[0]):
                     Logger.warning("GMM returned NaN. Setting dx to 0.")
                     Logger.warning(
-                        f"Skill ID: {skill_id[i]}, RefineVector: {refine_vector[i]}, State: {x[:3]}"
+                        f"Skill ID: {skill_id[i, 0]}, RefineVector: {refine_vector[i]}, State: {ob[i, :3]}"
                     )
                     dx_pos = np.zeros_like(dx_pos)
                 stacked_ac[i, j] = dx_pos
@@ -497,7 +551,10 @@ class SeqRefAgent(BaseAgent):
 
         # Get refined stacked actions BxT
         ac = self.ms_agent.get_refined_skill_actions(
-            o["ob"][:, 0, :].squeeze(1), rv.squeeze(1), skill_id, cfg.skill_horizon
+            o["ob"][:, 0, :].squeeze(1).cpu().numpy(),
+            rv.squeeze(1).cpu().numpy(),
+            skill_id.cpu().numpy(),
+            cfg.skill_horizon,
         )
         ac = ac.unsqueeze(1)
 
@@ -836,3 +893,35 @@ class SeqRefAgent(BaseAgent):
                 f"log/temp/{self._update_iter}.png",
             )
         )
+
+
+def refined_skill_actions(
+    cfg, skill_actor, ob, refine_vector, skill_id, skill_horizon, skill_ac_dim
+):
+    """
+    Input
+        ob: numpy array (B, 21)
+        refine_vector: numpy array (1, self._meta_ac_dim)
+        skill_id: (B, 1)
+        skill_horizon: int
+    Returns numpy array (B, 30) stacked actions by performing the
+    """
+    stacked_ac = np.empty((ob.shape[0], cfg.skill_dim, skill_ac_dim))
+    for i in range(ob.shape[0]):
+        x_pos = ob[i, :3]
+        if refine_vector[i] is not None:
+            refine_dict = get_refine_dict(cfg, refine_vector[i])
+            skill_actor.refine_params(refine_dict, skill_id[i, 0])
+        for j in range(skill_horizon):
+            dx_pos = skill_actor.skill_ds[skill_id[i, 0]].predict_dx_pos(x_pos)
+            # TODO: This is bad. But needed to go through everything without errors
+            if np.isnan(dx_pos[0]):
+                Logger.warning("GMM returned NaN. Setting dx to 0.")
+                Logger.warning(
+                    f"Skill ID: {skill_id[i, 0]}, RefineVector: {refine_vector[i]}, State: {ob[i, :3]}"
+                )
+                dx_pos = np.zeros_like(dx_pos)
+            stacked_ac[i, j] = dx_pos
+            x_pos = x_pos + cfg.pretrain.dataset.dt * dx_pos
+        skill_actor.reset_params(skill_id[i, 0])
+    return stacked_ac.reshape(ob.shape[0], cfg.skill_dim * skill_ac_dim)

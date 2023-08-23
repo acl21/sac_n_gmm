@@ -219,6 +219,12 @@ class ManifoldGMM(object):
         """
         Goal centers the input x and returns dx
         """
+        return self.predict_dx_pos(x[:3]), self.predict_dx_ori(x[3:6])
+
+    def predict_dx_pos(self, x):
+        """
+        Goal centers the input x and returns dx
+        """
         dx_pos, _, __ = manifold_gmr(
             (x[:3] - self.goal).reshape(1, -1),
             self.manifold,
@@ -226,8 +232,10 @@ class ManifoldGMM(object):
             self.covariances,
             self.priors,
         )
-        dx_ori = self.get_minimal_rotation(x[3:6])
-        return dx_pos[0], dx_ori
+        return dx_pos[0]
+
+    def predict_dx_ori(self, x):
+        return self.get_minimal_rotation(x)
 
     def get_reshaped_means(self):
         """Reshape means from (n_comp, 2) to (n_comp, 2, state_size)"""
