@@ -1,5 +1,5 @@
 defaults:
-  - calvin_conf/cameras@cameras: static_only  # no image: no_cameras
+  - calvin_conf/cameras@cameras: static_and_gripper  # no image: no_cameras
   - calvin_conf/scene@scene_cfg: calvin_scene_D
   - calvin_conf/robot@robot_cfg: panda_longer_finger
   - calvin_conf/tasks@tasks: customized_tasks

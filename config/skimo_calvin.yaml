@@ -10,10 +10,11 @@ rolf:
   reward_scale: 0.01 # `reward_norm` in environment is 100
   num_units: 256
   num_layers: 4
-  state_dim: 256
+  state_dim: 533
   log_std: true
   pretrain:
-    data_path: data/calvin.gz
+    # data_path: data/calvin.gz
+    data_path: data/calvin_w_gripper.gz
     split: {train: 0.99, val: 0.01, test: 0.0}
     batch_size: 512
     log_every: 100

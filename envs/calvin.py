@@ -6,6 +6,8 @@ import hydra
 import numpy as np
 from gym import spaces
 from calvin_env.envs.play_table_env import PlayTableSimEnv
+from lib.networks.autoencoder import PTEncoder
+import torch
 
 
 class CalvinEnv(PlayTableSimEnv):
@@ -32,7 +34,8 @@ class CalvinEnv(PlayTableSimEnv):
         super().__init__(**kwargs)
 
         self.action_space = spaces.Box(low=-1, high=1, shape=(7,))
-        self.observation_space = spaces.Box(low=-1, high=1, shape=(21,))
+        # self.observation_space = spaces.Box(low=-1, high=1, shape=(21,))
+        self.observation_space = spaces.Box(low=-1, high=1, shape=(533,))
 
         self.tasks = hydra.utils.instantiate(tasks)
         self.target_tasks = list(self.tasks.tasks.keys())
@@ -45,6 +48,7 @@ class CalvinEnv(PlayTableSimEnv):
         self.ee_noise = np.array([0.1, 0.1, 0.05])  # Units: meters
         self.init_pos = None
         self.set_init_pos()
+        self.pt_encoder = PTEncoder("cifar10-resnet18").to("cuda")
 
     def reset(self):
         obs = super().reset()
@@ -61,8 +65,23 @@ class CalvinEnv(PlayTableSimEnv):
         return super().reset(robot_obs=state[:15], scene_obs=state[15:])
 
     def get_obs(self):
+        return self.get_custom_obs()
+
+    def get_default_obs(self):
         obs = self.get_state_obs()
         return np.concatenate([obs["robot_obs"], obs["scene_obs"]])[:21]
+
+    def get_custom_obs(self):
+        obs = super().get_obs()
+
+        gripper_img = np.moveaxis(obs["rgb_obs"]["rgb_gripper"], 2, 0)
+        gripper_img = torch.tensor(gripper_img).to("cuda")
+        gripper_img = gripper_img.unsqueeze(0)
+        with torch.no_grad():
+            gripper_state = self.pt_encoder(gripper_img)
+        return np.concatenate(
+            [self.get_default_obs(), gripper_state.cpu().numpy().flatten()]
+        )
 
     def _reward(self):
         current_info = self.get_info()
