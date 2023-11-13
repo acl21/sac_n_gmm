@@ -39,9 +39,7 @@ class SkiMoMetaAgent(BaseAgent):
         self._ob_dim = gym.spaces.flatdim(ob_space)
 
         self.model = TDMPCModel(cfg, self._ob_space, cfg.skill_dim, self._dtype)
-        # self.model.encoder = None
         self.model_target = TDMPCModel(cfg, self._ob_space, cfg.skill_dim, self._dtype)
-        # self.model_target.encoder = None
         copy_network(self.model_target, self.model)
         self.actor = ActionDecoder(
             cfg.state_dim,
@@ -50,7 +48,7 @@ class SkiMoMetaAgent(BaseAgent):
             cfg.dense_act,
             cfg.log_std,
         )
-        # self.decoder = Decoder(cfg.decoder, cfg.state_dim, self._ob_space)
+        self.decoder = Decoder(cfg.decoder, cfg.state_dim, self._ob_space)
         self.pt_encoder = PTEncoder("cifar10-resnet18")
         self.to(self._device)
 
@@ -59,14 +57,14 @@ class SkiMoMetaAgent(BaseAgent):
             "actor": self.actor.state_dict(),
             "model": self.model.state_dict(),
             "model_target": self.model_target.state_dict(),
-            # "decoder": self.decoder.state_dict(),
+            "decoder": self.decoder.state_dict(),
         }
 
     def load_state_dict(self, ckpt):
         self.actor.load_state_dict(ckpt["actor"])
         self.model.load_state_dict(ckpt["model"])
         self.model_target.load_state_dict(ckpt["model_target"])
-        # self.decoder.load_state_dict(ckpt["decoder"])
+        self.decoder.load_state_dict(ckpt["decoder"])
         self.to(self._device)
 
     @property
@@ -90,8 +88,7 @@ class SkiMoMetaAgent(BaseAgent):
         cfg = self._cfg
         horizon = int(self._horizon_decay(self._step))
 
-        # state = self.model.encoder(ob)
-        state = ob["ob"]
+        state = self.model.encoder(ob)
 
         # Sample policy trajectories.
         z = state.repeat(cfg.num_policy_traj, 1)
@@ -154,8 +151,7 @@ class SkiMoMetaAgent(BaseAgent):
             ob = self.preprocess(ob)
             # act purely based on the policy
             if self._cfg.phase == "pretrain" or warmup or not self._cfg.use_cem:
-                # feat = self.model.encoder(ob)
-                feat = ob["ob"]
+                feat = self.model.encoder(ob)
                 ac = self.actor.act(feat, deterministic=not is_train)
                 ac = ac.cpu().numpy().squeeze(0)
             # act based on CEM planning
@@ -221,14 +217,14 @@ class SkiMoSkillAgent(BaseAgent):
     def state_dict(self):
         return {
             "actor": self.actor.state_dict(),
-            # "encoder": self.encoder.state_dict(),
+            "encoder": self.encoder.state_dict(),
             "skill_encoder": self.skill_encoder.state_dict(),
             "ob_norm": self._ob_norm.state_dict(),
         }
 
     def load_state_dict(self, ckpt):
         self.actor.load_state_dict(ckpt["actor"])
-        # self.encoder.load_state_dict(ckpt["encoder"])
+        self.encoder.load_state_dict(ckpt["encoder"])
         self.skill_encoder.load_state_dict(ckpt["skill_encoder"])
         self.to(self._device)
 
@@ -248,14 +244,13 @@ class SkiMoSkillAgent(BaseAgent):
         with torch.autocast(self._cfg.device, enabled=self._use_amp):
             ob = to_tensor(ob, self._device, self._dtype)
             ob = self.preprocess(ob)
-            # feat = self.encoder(ob)
-            feat = ob["ob"]
+            feat = self.encoder(ob)
             if cond is not None:
                 cond = to_tensor(cond, self._device, self._dtype).unsqueeze(0)
             ac = self.actor.act(feat, cond, deterministic=True)
             ac = ac.cpu().numpy().squeeze(0)
             ac = gym.spaces.unflatten(self._ac_space, ac)
-        # self.encoder.train()
+        self.encoder.train()
         self.actor.train()
         return ac, mean
 
@@ -377,27 +372,23 @@ class SkiMoAgent(BaseAgent):
         adam_amp = lambda model, lr: AdamAMP(
             model, lr, cfg.weight_decay, cfg.grad_clip, self._device, self._use_amp
         )
-        # self.hl_modules = [hl_agent.actor, hl_agent.model, hl_agent.decoder]
-        # self.ll_modules = [ll_agent.encoder, ll_agent.actor, ll_agent.skill_encoder]
-        self.hl_modules = [hl_agent.actor, hl_agent.model]
-        self.ll_modules = [ll_agent.actor, ll_agent.skill_encoder]
+        self.hl_modules = [hl_agent.actor, hl_agent.model, hl_agent.decoder]
+        self.ll_modules = [ll_agent.encoder, ll_agent.actor, ll_agent.skill_encoder]
 
         # Optimize the skill dynamics and skills jointly.
         if cfg.joint_training:
             self.joint_modules = self.hl_modules + self.ll_modules
             self.joint_optim = adam_amp(self.joint_modules, cfg.joint_lr)
         else:
-            # self.hl_model_optim = adam_amp(
-            #     [hl_agent.model, hl_agent.decoder], cfg.model_lr
-            # )
-            self.hl_model_optim = adam_amp([hl_agent.model], cfg.model_lr)
+            self.hl_model_optim = adam_amp(
+                [hl_agent.model, hl_agent.decoder], cfg.model_lr
+            )
             self.hl_actor_optim = adam_amp(hl_agent.actor, cfg.actor_lr)
             self.ll_actor_optim = adam_amp(self.ll_modules, cfg.actor_lr)
 
         if cfg.phase == "rl":
             actor_modules = [hl_agent.actor]
-            # model_modules = [hl_agent.model, hl_agent.decoder]
-            model_modules = [hl_agent.model]
+            model_modules = [hl_agent.model, hl_agent.decoder]
             if cfg.sac:
                 actor_modules += [hl_agent.model.encoder]
             self.actor_optim = adam_amp(actor_modules, cfg.actor_lr)
@@ -522,7 +513,7 @@ class SkiMoAgent(BaseAgent):
         max_kl = cfg.max_divergence
 
         if cfg.freeze_model:
-            # hl_agent.model.encoder.requires_grad_(False)
+            hl_agent.model.encoder.requires_grad_(False)
             hl_agent.model.dynamics.requires_grad_(False)
 
         # ob: {k: BxTx`ob_dim[k]`}, ac: BxTx`ac_dim`, rew: BxTx1
@@ -537,14 +528,11 @@ class SkiMoAgent(BaseAgent):
             else:
                 return x.transpose(0, 1)
 
-        # hl_feat = flip(hl_agent.model.encoder(o))
-        hl_feat = flip(o["ob"])
+        hl_feat = flip(hl_agent.model.encoder(o))
         # Avoid gradients for the skill prior and model target
         with torch.no_grad():
-            # sp_feat = flip(self.skill_prior.model.encoder(o))
-            # hl_feat_target = flip(hl_agent.model_target.encoder(o))
-            sp_feat = flip(o["ob"])
-            hl_feat_target = flip(o["ob"])
+            sp_feat = flip(self.skill_prior.model.encoder(o))
+            hl_feat_target = flip(hl_agent.model_target.encoder(o))
 
         ob = flip(o, cfg.n_skill + 1)
         ac = flip(ac)
@@ -634,8 +622,7 @@ class SkiMoAgent(BaseAgent):
             skill_prior_loss = torch.tensor(0.0, device=self._device)
             alpha = self.log_alpha.exp().detach()
             actor_prior_divs = []
-            # hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
-            hl_feat = flip(o["ob"]) if cfg.sac else hl_feat.detach()
+            hl_feat = flip(hl_agent.model.encoder(o)) if cfg.sac else hl_feat.detach()
             z = z_next_pred = hl_feat[0]
 
             # Computes `actor_loss` based on imagined states, `skill_prior_loss` based on encoded ground-truth states.
@@ -770,8 +757,7 @@ class SkiMoAgent(BaseAgent):
 
         with torch.autocast(self._cfg.device, enabled=self._use_amp):
             # Trains skill policy and skill embedding space.
-            # ll_embed = ll_agent.encoder(o)
-            ll_embed = o["ob"]
+            ll_embed = ll_agent.encoder(o)
             x = ac.view(B, L, -1)
             if cfg.lstm:
                 x = torch.cat(
@@ -811,18 +797,17 @@ class SkiMoAgent(BaseAgent):
 
             # Trains skill dynamics model and skill prior.
             hl_o = dict(ob=o["ob"][:, ::H])
-            # hl_feat = flip(hl_agent.model.encoder(hl_o))
-            hl_feat = flip(hl_o["ob"])
+            hl_feat = flip(hl_agent.model.encoder(hl_o))
             with torch.no_grad():
-                hl_feat_target = flip(hl_o["ob"])
+                hl_feat_target = flip(hl_agent.model_target.encoder(hl_o))
             hl_ac = flip(z)
 
             # HL observation reconstruction loss.
-            # hl_ob_pred = hl_agent.decoder(hl_feat)
-            # hl_recon_losses = {
-            # k: -hl_ob_pred[k].log_prob(flip(v)).mean() for k, v in hl_o.items()
-            # }
-            # hl_recon_loss = sum(hl_recon_losses.values())
+            hl_ob_pred = hl_agent.decoder(hl_feat)
+            hl_recon_losses = {
+                k: -hl_ob_pred[k].log_prob(flip(v)).mean() for k, v in hl_o.items()
+            }
+            hl_recon_loss = sum(hl_recon_losses.values())
 
             # HL latent state consistency loss.
             h = h_next_pred = hl_feat[0]
@@ -839,9 +824,8 @@ class SkiMoAgent(BaseAgent):
                 hs.append(h_next_pred)
 
             hl_model_loss = (
-                # scalars.hl_model * hl_recon_loss
-                +scalars.consistency
-                * consistency_loss.clamp(max=1e4).mean()
+                scalars.hl_model * hl_recon_loss
+                + scalars.consistency * consistency_loss.clamp(max=1e4).mean()
             )
             hl_model_loss.register_hook(lambda grad: grad * (1 / L))
 
@@ -867,7 +851,7 @@ class SkiMoAgent(BaseAgent):
         info["ll_vae_kl_loss"] = ll_vae_kl_loss.item()
         info["vae_kl_div"] = vae_kl_div_clipped.mean().item()
         info["consistency_loss"] = consistency_loss.mean().item()
-        # info["hl_recon_loss"] = hl_recon_loss.item()
+        info["hl_recon_loss"] = hl_recon_loss.item()
         info["actor_std"] = meta_ac_dist.base_dist.base_dist.scale.mean().item()
 
         if cfg.joint_training:
