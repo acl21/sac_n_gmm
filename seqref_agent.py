@@ -124,10 +124,10 @@ class SeqRefMetaSkillAgent(BaseAgent):
         policy_rv = []
         for t in range(horizon):
             rv = self.meta_actor.act(z)
-            ac = self.get_refined_skill_actions(
-                obs.cpu().numpy(),
-                rv.cpu().numpy(),
-                torch.tensor(skill_id).repeat((obs.shape[0], 1)).cpu().numpy(),
+            ac = self.skill_actor.batch_actions(
+                obs[:, :3].cpu(),
+                rv.cpu(),
+                torch.tensor(skill_id).repeat((obs.shape[0], 1)).cpu(),
                 cfg.skill_horizon,
             )
             policy_ac.append(ac)
@@ -152,10 +152,10 @@ class SeqRefMetaSkillAgent(BaseAgent):
             sample_rv = torch.clamp(sample_rv, -0.999, 0.999)
             rv = torch.cat([sample_rv, policy_rv], dim=1)
             # start = time.time()
-            sample_ac = self.get_refined_skill_actions(
-                obs[: cfg.num_sample_traj].cpu().numpy(),
-                sample_rv.squeeze(0).cpu().numpy(),
-                torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)).cpu().numpy(),
+            sample_ac = self.skill_actor.batch_actions(
+                obs[: cfg.num_sample_traj, :3].cpu(),
+                sample_rv.squeeze(0).cpu(),
+                torch.tensor(skill_id).repeat((cfg.num_sample_traj, 1)).cpu(),
                 cfg.skill_horizon,
             ).unsqueeze(0)
             # end = time.time()
@@ -227,93 +227,13 @@ class SeqRefMetaSkillAgent(BaseAgent):
         """Takes x, performs horizon steps with skill_id-th skill, returns stacked dx-es"""
         if refine_vector is not None:
             self.refine(refine_vector.cpu().numpy(), skill_id)
-        dx_pos, dx_ori = self.skill_actor.act(obs.copy(), skill_id)
-        ac = np.append(
-            dx_pos, np.append(dx_ori, -1)
-        )  # pos, ori, gripper_width i.e., size=7
+        ac = self.skill_actor.act(obs.copy(), skill_id)
         ac = gym.spaces.unflatten(self._skill_ac_space, ac)
         return ac
 
     def refine(self, refine_vector, skill_id):
         refine_dict = get_refine_dict(self._cfg, refine_vector)
-        self.skill_actor.refine_params(refine_dict, skill_id)
-
-    @torch.no_grad()
-    def get_refined_skill_actions_parallel(
-        self, ob, refine_vector, skill_id, skill_horizon
-    ):
-        """
-        Input
-            ob: numpy array (B, 21)
-            refine_vector: numpy array (B, self._meta_ac_dim)
-            skill_id: numpy array (B, 1)
-            skill_horizon: int
-        Returns tensor (B, 30) stacked actions by performing the
-        skill_id-th skill (refined by given refine_vector) for skill_horizon steps
-        """
-        splits = 8  # min([os.cpu_count(), ob.shape[0]])
-        cfg_list = [copy.copy(self._cfg) for _ in range(splits)]
-        skill_actor_list = [copy.deepcopy(self.skill_actor) for _ in range(splits)]
-        ob_list = list(np.array_split(ob, splits))
-        rv_list = list(np.array_split(refine_vector, splits))
-        skill_id_list = list(np.array_split(skill_id, splits))
-        skill_horizon_list = [skill_horizon for _ in range(splits)]
-        skill_ac_dim_list = [self._skill_ac_dim for _ in range(splits)]
-        arguments = list(
-            zip(
-                cfg_list,
-                skill_actor_list,
-                ob_list,
-                rv_list,
-                skill_id_list,
-                skill_horizon_list,
-                skill_ac_dim_list,
-            )
-        )
-
-        pool = mp.Pool(processes=splits)
-        start = time.time()
-        stacked_acs = pool.starmap(refined_skill_actions, arguments)
-        end = time.time()
-        print("Starmap Runtime: ", end - start)
-        pool.close()
-        pool.join()  # TODO: Check if this slows the main thread down
-
-        return torch.from_numpy(np.concatenate(stacked_acs)).to(
-            dtype=self._dtype, device=self._device
-        )
-
-    @torch.no_grad()
-    def get_refined_skill_actions(self, ob, refine_vector, skill_id, skill_horizon):
-        """
-        Input
-            ob: tensor (B, 21)
-            refine_vector: tensor (B, self._meta_ac_dim)
-            skill_id: (B, 1)
-            skill_horizon: int
-        Returns (B, 30) stacked actions by performing the
-        skill_id-th skill (refined by given refine_vector) for skill_horizon steps
-        """
-        stacked_ac = np.empty((ob.shape[0], self._cfg.skill_dim, self._skill_ac_dim))
-        for i in range(ob.shape[0]):
-            x_pos = ob[i, :3].copy()
-            if refine_vector is not None:
-                self.refine(refine_vector[i], skill_id[i, 0])
-            for j in range(skill_horizon):
-                dx_pos = self.skill_actor.skill_ds[skill_id[i, 0]].predict_dx_pos(x_pos)
-                # TODO: This is bad. But needed to go through everything without errors
-                if np.isnan(dx_pos[0]):
-                    Logger.warning("GMM returned NaN. Setting dx to 0.")
-                    Logger.warning(
-                        f"Skill ID: {skill_id[i, 0]}, RefineVector: {refine_vector[i]}, State: {ob[i, :3]}"
-                    )
-                    dx_pos = np.zeros_like(dx_pos)
-                stacked_ac[i, j] = dx_pos
-                x_pos = x_pos + self._cfg.pretrain.dataset.dt * dx_pos
-        stacked_ac = torch.from_numpy(
-            stacked_ac.reshape(ob.shape[0], self._cfg.skill_dim * self._skill_ac_dim)
-        )
-        return stacked_ac.to(dtype=self._dtype, device=self._device)
+        self.skill_actor.update_model(refine_dict, skill_id)
 
     def preprocess(self, ob, aug=None):
         ob = ob.copy()
@@ -476,7 +396,7 @@ class SeqRefAgent(BaseAgent):
 
     def load_state_dict(self, ckpt):
         self.ms_agent.load_state_dict(ckpt["ms_agent"])
-        self.ms_agent.skill_actor.load_params()
+        self.ms_agent.skill_actor.load_model()
 
         self.hl_model_optim.load_state_dict(ckpt["hl_model_optim"])
         self.hl_actor_optim.load_state_dict(ckpt["hl_actor_optim"])
@@ -550,9 +470,9 @@ class SeqRefAgent(BaseAgent):
         o = self.preprocess(o, aug=self._aug)
 
         # Get refined stacked actions BxT
-        ac = self.ms_agent.get_refined_skill_actions(
-            o["ob"][:, 0, :].squeeze(1).cpu().numpy(),
-            rv.squeeze(1).cpu().numpy(),
+        ac = self.ms_agent.skill_actor.batch_actions(
+            o["ob"][:, 0, :3].squeeze(1).cpu(),
+            rv.squeeze(1).cpu(),
             skill_id.cpu().numpy(),
             cfg.skill_horizon,
         )
@@ -767,7 +687,7 @@ class SeqRefAgent(BaseAgent):
         o = dict(ob=ob)
         o = self.preprocess(o, aug=self._aug)
         if ac.shape[1] == L * H + 1:
-            ac = ac[:, :-1, :3]  # only position
+            ac = ac[:, :-1, :3]  # only positional velocity
 
         with torch.autocast(self._cfg.device, enabled=self._use_amp):
             # Trains skill dynamics model.
@@ -911,9 +831,9 @@ def refined_skill_actions(
         x_pos = ob[i, :3]
         if refine_vector[i] is not None:
             refine_dict = get_refine_dict(cfg, refine_vector[i])
-            skill_actor.refine_params(refine_dict, skill_id[i, 0])
+            skill_actor.update_model(refine_dict, skill_id[i, 0])
         for j in range(skill_horizon):
-            dx_pos = skill_actor.skill_ds[skill_id[i, 0]].predict_dx_pos(x_pos)
+            dx_pos = skill_actor.skill_ds[skill_id[i, 0]].predict_dx(x_pos)
             # TODO: This is bad. But needed to go through everything without errors
             if np.isnan(dx_pos[0]):
                 Logger.warning("GMM returned NaN. Setting dx to 0.")
@@ -923,5 +843,5 @@ def refined_skill_actions(
                 dx_pos = np.zeros_like(dx_pos)
             stacked_ac[i, j] = dx_pos
             x_pos = x_pos + cfg.pretrain.dataset.dt * dx_pos
-        skill_actor.reset_params(skill_id[i, 0])
+        skill_actor.reset_model(skill_id[i, 0])
     return stacked_ac.reshape(ob.shape[0], cfg.skill_dim * skill_ac_dim)

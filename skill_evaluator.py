@@ -20,14 +20,14 @@ class TaskEval(object):
         self.cfg = cfg
         self.env = make_env(cfg.env.id, cfg.env, cfg.seed, cfg.rolf.name)
         self.env_ac_space = self.env.action_space
+        self.skill_id = 0
         self.skills = self.cfg.rolf.pretrain.skills
         self.env.env.env.env.target_tasks = np.copy(self.skills).tolist()
         self.env.env.env.env.tasks_to_complete = np.copy(self.skills).tolist()
-        self.env.env.env.env.set_init_pos()
+        # self.env.env.env.env.set_init_pos()
         self.task_name = "_".join(self.skills)
         self.actor = GMMSkillActor(self.cfg.rolf.pretrain)
-        self.actor.load_params()
-        self.state_type = self.cfg.rolf.pretrain.dataset.input_type
+        self.actor.load_model()
 
         # Logging
         self.logs_out_dir = os.path.join(
@@ -41,25 +41,22 @@ class TaskEval(object):
         self.frames = []
 
     def act(self, obs, skill_id):
-        dx, dx_ori = self.actor.act(obs["ob"], skill_id)
-        env_ac = np.append(
-            dx, np.append(dx_ori, -1)
-        )  # pos, ori, gripper_width i.e., size=7
+        env_ac = self.actor.act(obs["ob"], skill_id)
         env_ac = gym.spaces.unflatten(self.env_ac_space, env_ac)
         return env_ac
 
     def run(self):
         succesful_rollouts, rollout_returns, rollout_lengths = 0, [], []
         rollout_return = 0
-        skill_id = 0
-        num_evals = 50
+        skill_id = self.skill_id
+        num_evals = 5
         for eval_no in range(num_evals):
             obs = self.env.reset()
             if self.cfg.rolf.record:
                 self.record_frame()
             if self.cfg.rolf.render:
                 self.env.render()
-            skill_id = 0
+            skill_id = self.skill_id
             for step in range(self.env.max_episode_steps):
                 action = self.act(obs, skill_id)
                 obs, reward, done, info = self.env.step(action)
@@ -72,6 +69,7 @@ class TaskEval(object):
 
                 if reward > 0:
                     self.logger.info(f"Skill: {skill_id}, Step: {step}")
+                    # done = True
                     skill_id += 1
                     if skill_id == len(self.skills) + 1:
                         done = True
@@ -126,6 +124,7 @@ class TaskEval(object):
 
 @hydra.main(config_path="config", config_name="seqref_calvin")
 def main(cfg: DictConfig) -> None:
+    cfg.rolf.record = True
     eval = TaskEval(cfg)
     eval.run()
 
